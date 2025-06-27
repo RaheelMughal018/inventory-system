@@ -57,7 +57,7 @@ def create_customer(data):
 
 def update_customer(customer_id, data):
     try:
-        customer = customer.query.get(customer_id)
+        customer = Customer.query.get(customer_id)
         if not customer:
             raise ValueError("customer not found")
 
@@ -81,7 +81,7 @@ def update_customer(customer_id, data):
     
 def delete_customer(customer_id):
     try:
-        customer = customer.query.get(customer_id)
+        customer = Customer.query.get(customer_id)
         if not customer:
             raise ValueError("customer not found")
 
@@ -104,7 +104,7 @@ def delete_customer(customer_id):
 
 def get_customer_by_id(customer_id):
     try:
-        customer = customer.query.get(customer_id)
+        customer = Customer.query.get(customer_id)
         if not customer:
             return None
         return {

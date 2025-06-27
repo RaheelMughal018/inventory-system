@@ -33,7 +33,7 @@ with app.app_context():
             updated_at=datetime.now(timezone.utc)
         )
         suppliers.append(supplier)
-    for _ in range(num_suppliers):
+    for _ in range(num_customers):
         customer = Customer(
             id=str(uuid.uuid4()),
             name=fake.company(),

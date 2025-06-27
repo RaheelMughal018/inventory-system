@@ -24,6 +24,9 @@ def create_app():
     from app.routes.suppliers import supplier_bp
     app.register_blueprint(supplier_bp, url_prefix="/api/suppliers")
 
+    from app.routes.customers import customer_bp
+    app.register_blueprint(customer_bp, url_prefix="/api/customers")
+
 
     register_error_handlers(app)
 
