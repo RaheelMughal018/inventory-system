@@ -1,7 +1,7 @@
 # app/routes/supplier_routes.py
 
 from flask import Blueprint, request
-from app.services.suppliers import get_all_suppliers, create_supplier, update_supplier,delete_supplier
+from app.services.suppliers import get_all_suppliers, create_supplier, update_supplier, delete_supplier, get_supplier_by_id
 from app.common.response import SuccessResponse, ErrorResponse
 from flask import current_app
 supplier_bp = Blueprint('suppliers', __name__)
@@ -43,7 +43,7 @@ def update_supplier_route(supplier_id):
 @supplier_bp.route('/<string:supplier_id>',methods=['DELETE'])
 def remove_supplier(supplier_id):
     try:
-        current_app.logger.info("DELETE /api/suppliers/<id>  HIT...")
+        current_app.logger.info(f"DELETE /api/suppliers/{supplier_id}  HIT...")
         deleted = delete_supplier(supplier_id)
         return SuccessResponse.send(deleted, message="Supplier deleted successfully")
     except ValueError as ve:
@@ -52,4 +52,16 @@ def remove_supplier(supplier_id):
         current_app.logger.error(f"Error deleting supplier: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=500)
 
-    
+@supplier_bp.route('/<string:supplier_id>', methods=['GET'])
+def fetch_supplier_by_id(supplier_id):
+    try:
+        current_app.logger.info(f"GET /api/suppliers/{supplier_id} HIT...")
+        supplier = get_supplier_by_id(supplier_id)
+        if not supplier:
+            return ErrorResponse.send(message="Supplier not found", status_code=404)
+        return SuccessResponse.send(supplier, message="Supplier fetched successfully")
+    except Exception as e:
+        current_app.logger.error(f"Error fetching supplier: {str(e)}")
+        return ErrorResponse.send(message=str(e), status_code=500)
+
+
