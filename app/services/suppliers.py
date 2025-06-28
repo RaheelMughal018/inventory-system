@@ -110,6 +110,7 @@ def delete_supplier(supplier_id):
         raise RuntimeError(f"Database error: {str(e)}")
 
 def get_supplier_by_id(supplier_id):
+    print("getting customer by id")
     try:
         supplier = Supplier.query.get(supplier_id)
         if not supplier:
@@ -122,6 +123,7 @@ def get_supplier_by_id(supplier_id):
             'created_at': supplier.created_at.isoformat() if supplier.created_at else None,
             'updated_at': supplier.updated_at.isoformat() if supplier.updated_at else None
         }
+    
     except SQLAlchemyError as e:
         current_app.logger.exception(f"Database error occurred: {str(e)}")
         raise RuntimeError(f"Database error: {str(e)}")
