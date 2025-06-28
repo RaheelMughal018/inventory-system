@@ -9,8 +9,10 @@ customer_bp = Blueprint('customers', __name__)
 @customer_bp.route('', methods=['GET'])
 def fetch_customers():
     try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
         current_app.logger.info("GET /api/customers  HIT...")
-        data = get_all_customers()
+        data = get_all_customers(page,limit)
         return SuccessResponse.send(data, message="customers fetched successfully")
     except Exception as e:
         current_app.logger.error(f"Error fetching customers: {str(e)}")
