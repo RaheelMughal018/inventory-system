@@ -7,20 +7,27 @@ from app import db
 from flask import current_app
 
 
-def get_all_customers():
+def get_all_customers(page,limit):
     try:
-        customers = Customer.query.all()
-        return [
-            {
-                'id': str(customer.id),
-                'name': customer.name,
-                'phone': customer.phone,
-                'address': customer.address,
-                'created_at': customer.created_at.isoformat(),
-                'updated_at': customer.updated_at.isoformat(),
-            }
-            for customer in customers
-        ]
+         paginated = Customer.query.paginate(page=page,per_page=limit,error_out=False)
+         current_app.logger.info("paginate: ",paginated)
+         return {
+            "total": paginated.total,
+            "pages": paginated.pages,
+            "current_page": paginated.page,
+            "per_page": paginated.per_page,
+            "data": [
+                {
+                    'id': str(c.id),
+                    'name': c.name,
+                    'phone': c.phone,
+                    'address': c.address,
+                    'created_at': c.created_at.isoformat() if c.created_at else None,
+                    'updated_at': c.updated_at.isoformat() if c.updated_at else None
+                }
+                for c in paginated.items
+            ]
+        }
     except SQLAlchemyError as e:
         current_app.logger.exception(f"Database error occurred {str(e)}")
         raise RuntimeError(f"Database error: {str(e)}")
