@@ -6,7 +6,7 @@ from app.common.response import SuccessResponse, ErrorResponse
 from flask import current_app
 supplier_bp = Blueprint('suppliers', __name__)
 
-@supplier_bp.route('/', methods=['GET'])
+@supplier_bp.route('', methods=['GET'])
 def fetch_suppliers():
     try:
         current_app.logger.info("GET /api/suppliers  HIT...")
@@ -16,7 +16,7 @@ def fetch_suppliers():
         current_app.logger.error(f"Error fetching suppliers: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=500)
 
-@supplier_bp.route('/',methods=['POST'])
+@supplier_bp.route('',methods=['POST'])
 def create_suppliers():
     try:
         current_app.logger.info("POST /api/suppliers  HIT...")

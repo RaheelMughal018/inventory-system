@@ -6,7 +6,7 @@ from app.common.response import SuccessResponse, ErrorResponse
 from flask import current_app
 customer_bp = Blueprint('customers', __name__)
 
-@customer_bp.route('/', methods=['GET'])
+@customer_bp.route('', methods=['GET'])
 def fetch_customers():
     try:
         current_app.logger.info("GET /api/customers  HIT...")
@@ -16,7 +16,7 @@ def fetch_customers():
         current_app.logger.error(f"Error fetching customers: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=500)
 
-@customer_bp.route('/',methods=['POST'])
+@customer_bp.route('',methods=['POST'])
 def create_customers():
     try:
         current_app.logger.info("POST /api/customers  HIT...")
