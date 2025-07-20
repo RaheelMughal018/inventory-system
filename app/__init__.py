@@ -27,6 +27,13 @@ def create_app():
     from app.routes.customers import customer_bp
     app.register_blueprint(customer_bp, url_prefix="/api/customers")
 
+    from app.routes.item.item import item_bp
+    app.register_blueprint(item_bp, url_prefix="/api/items")
+
+
+    from app.routes.category import category_bp
+    app.register_blueprint(category_bp, url_prefix="/api/categories")
+
 
     register_error_handlers(app)
 
