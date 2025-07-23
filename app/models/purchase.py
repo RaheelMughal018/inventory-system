@@ -18,6 +18,5 @@ class Purchase(db.Model):
     total_amount = db.Column(db.Float)
     payment_status = db.Column(Enum(PaymentStatus))
     purchase_date = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    payment_date = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     payment = db.relationship('Payment', backref='purchase', uselist=False)

@@ -99,19 +99,20 @@ with app.app_context():
             total_amount=total,
             payment_status=status,
             purchase_date=purchase_date,
-            payment_date=purchase_date if is_paid else None
         )
         db.session.add(purchase)
         db.session.flush()
 
         if is_paid:
+            payment_date = datetime.now(timezone.utc)
             method = random.choice(list(PaymentMethod))
             payment = Payment(
                 purchase_id=purchase.purchase_id,
                 method=method,
                 bank_account=fake.company() if method == PaymentMethod.BANK else None,
                 amount_paid=total,
-                is_paid=True
+                is_paid=True,
+                payment_date=payment_date
             )
             db.session.add(payment)
             payments.append(payment)

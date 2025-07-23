@@ -16,3 +16,4 @@ class Payment(db.Model):
     bank_account = db.Column(db.String(100), nullable=True)
     amount_paid = db.Column(db.Float)
     is_paid = db.Column(db.Boolean, default=False)
+    payment_date = db.Column(db.DateTime, nullable=True)

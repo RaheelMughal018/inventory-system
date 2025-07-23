@@ -94,7 +94,7 @@ def create_purchase(data):
                 bank_account = data.get("bank_account")
                 if not bank_account:
                     raise ValueError("Bank account required for bank payment")
-
+                
             payment = Payment(
                 purchase_id=purchase.purchase_id,
                 method=method_enum,
