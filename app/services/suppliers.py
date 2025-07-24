@@ -23,7 +23,7 @@ def get_all_suppliers(page, limit, search=None):
             "per_page": paginated.per_page,
             "data": [
                 {
-                    'id': str(c.id),
+                    'supplier_id': str(c.supplier_id),
                     'name': c.name,
                     'phone': c.phone,
                     'address': c.address,
@@ -40,7 +40,7 @@ def get_all_suppliers(page, limit, search=None):
 def create_supplier(data):
     try:
         new_supplier = Supplier(
-            id = str(uuid.uuid4()),
+            supplier_id = str(uuid.uuid4()),
             name = data.get('name'),
             phone = data.get('phone'),
             address = data.get('address'),
@@ -52,7 +52,7 @@ def create_supplier(data):
 
 
         return {
-            'id': new_supplier.id,
+            'supplier_id': new_supplier.supplier_id,
             'name': new_supplier.name,
             'phone': new_supplier.phone,
             'address': new_supplier.address,
@@ -78,7 +78,7 @@ def update_supplier(supplier_id, data):
 
         db.session.commit()
         return {
-            'id': str(supplier.id),
+            'supplier_id': str(supplier.supplier_id),
             'name': supplier.name,
             'phone': supplier.phone,
             'address': supplier.address,
@@ -99,7 +99,7 @@ def delete_supplier(supplier_id):
         db.session.delete(supplier)
         db.session.commit()
         return {
-            'id': str(supplier.id),
+            'supplier_id': str(supplier.supplier_id),
             'name': supplier.name,
             'phone': supplier.phone,
             'address': supplier.address,
@@ -120,7 +120,7 @@ def get_supplier_by_id(supplier_id):
         if not supplier:
             return None
         return {
-            'id': str(supplier.id),
+            'supplier_id': str(supplier.supplier_id),
             'name': supplier.name,
             'phone': supplier.phone,
             'address': supplier.address,

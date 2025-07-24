@@ -19,4 +19,7 @@ class Purchase(db.Model):
     payment_status = db.Column(Enum(PaymentStatus))
     purchase_date = db.Column(db.DateTime, nullable=False, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    # relationships
     payment = db.relationship('Payment', backref='purchase', uselist=False)
+    item = db.relationship('Item', backref='purchases', lazy=True)
+    supplier = db.relationship('Supplier', backref='purchases', lazy=True)
