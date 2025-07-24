@@ -7,10 +7,15 @@ from app import db
 from flask import current_app
 
 
-def get_all_suppliers(page,limit):
+def get_all_suppliers(page, limit, search=None):
     try:
-        paginated = Supplier.query.paginate(page=page,per_page=limit,error_out=False)
-        # current_app.logger.info("paginate: ",paginated)
+        base_query = Supplier.query
+
+        if search:
+            base_query = base_query.filter(Supplier.name.ilike(f"%{search.strip()}%"))
+
+        paginated = base_query.paginate(page=page, per_page=limit, error_out=False)
+
         return {
             "total": paginated.total,
             "pages": paginated.pages,
@@ -31,7 +36,6 @@ def get_all_suppliers(page,limit):
     except SQLAlchemyError as e:
         current_app.logger.exception(f"Database error occurred {str(e)}")
         raise RuntimeError(f"Database error: {str(e)}")
-
 
 def create_supplier(data):
     try:
