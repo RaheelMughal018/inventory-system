@@ -10,7 +10,7 @@ from flask import current_app
 def get_all_suppliers(page, limit, search=None):
     try:
         base_query = Supplier.query
-
+#test line
         if search:
             base_query = base_query.filter(Supplier.name.ilike(f"%{search.strip()}%"))
 
