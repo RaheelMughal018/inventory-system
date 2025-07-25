@@ -1,10 +1,12 @@
 from app.models.stock import  Stock
 from app.models.purchase import Purchase,PaymentStatus
-from app.models.payments import Payment, PaymentMethod
+from app.models.payments import Payment, PaymentMethod,BankAccounts
 from app.models.supplier import Supplier
 from app.models.item import Item
 from sqlalchemy.exc import SQLAlchemyError
-from app.services.purchase_filterations import apply_purchase_filters
+from app.utils.purchase_filterations import apply_purchase_filters
+from app.utils.payment_validation import validate_payment_details
+from app.utils.update_or_create_stock import update_or_create_stock
 
 from app import db
 from datetime import datetime,timezone
@@ -64,7 +66,6 @@ def create_purchase(data):
         item_name = data.get("item_name")
         item_type = data.get("item_type")
         quantity = int(data.get("quantity"))
-        unit_price = float(data.get("unit_price"))
         total_amount = float(data.get("total_amount"))
         supplier_id = data.get("supplier_id")
         payment_status_str = data.get("payment_status")  
@@ -83,60 +84,64 @@ def create_purchase(data):
             db.session.flush()  # So we get item.id for stock/purchase
 
         item_id = item.item_id
-
+        calculate_unit_price = total_amount / quantity if quantity > 0 else 0
         # Create Purchase
         purchase = Purchase(
             item_id=item_id,
             supplier_id=supplier_id,
             quantity=quantity,
-            unit_price=unit_price,
+            unit_price=calculate_unit_price,
             total_amount=total_amount,
             payment_status=payment_status,
             purchase_date=datetime.now(timezone.utc),  # ← Auto-set
-            payment_date=None  # updated later if paid
         )
         db.session.add(purchase)
         db.session.flush()
 
         # Update or Create Stock
-        stock = Stock.query.filter_by(item_id=item_id).first()
-        if stock:
-            stock.quantity += quantity
-        else:
-            stock = Stock(item_id=item_id, quantity=quantity)
-            db.session.add(stock)
+        stock, is_new = update_or_create_stock(item_id, quantity)
+        if is_new:
+            db.session.add(stock) 
 
-        # Handle Payment if Paid
+         # Validate and create Payment if status is Paid
+        method_enum, bank_account_enum = validate_payment_details(data, payment_status)
+
         if payment_status == PaymentStatus.PAID:
-            method_str = data.get("method")
-            if not method_str:
-                raise ValueError("Payment method required when marked Paid")
-
-            if method_str.upper() not in PaymentMethod.__members__:
-                raise ValueError("Invalid payment method")
-
-            method_enum = PaymentMethod[method_str.upper()]
-            bank_account = None
-            if method_enum == PaymentMethod.BANK:
-                bank_account = data.get("bank_account")
-                if not bank_account:
-                    raise ValueError("Bank account required for bank payment")
-                
             payment = Payment(
                 purchase_id=purchase.purchase_id,
                 method=method_enum,
-                bank_account=bank_account,
+                bank_account=bank_account_enum,
                 amount_paid=total_amount,
-                is_paid=True
-            )
-            purchase.payment_date = datetime.now(timezone.utc)
+                is_paid=True,
+                payment_date=datetime.now(timezone.utc)
+            ) 
             db.session.add(payment)
+            db.session.commit()
 
-        db.session.commit()
-
+        supplier = Supplier.query.get(supplier_id)
         return {
             "message": "Purchase created successfully",
-            "purchase_id": purchase.purchase_id
+            "purchase_id": purchase.purchase_id,
+            "data": {
+                "id": purchase.purchase_id,
+                "quantity": purchase.quantity,
+                "unit_price": purchase.unit_price,
+                "total_amount": purchase.total_amount,
+                "payment_status": purchase.payment_status.value,
+                "purchase_date": purchase.purchase_date,
+                "payment_date": payment.payment_date if payment else None,
+                "payment_method": payment.method.value if payment else None,
+                "item": {
+                    "id": item.item_id,
+                    "name": item.name,
+                    "type": item.type,
+                    "display": f"{item.name} - {item.type}"
+                },
+                "supplier": {
+                    "id": supplier.supplier_id,
+                    "name": supplier.name
+                }
+            }
         }
 
     except Exception as e:
