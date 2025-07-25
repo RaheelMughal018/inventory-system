@@ -4,7 +4,7 @@ from app.models.customer import Customer
 from app.models.item import Item
 from app.models.stock import Stock
 from app.models.purchase import Purchase, PaymentStatus
-from app.models.payments import Payment, PaymentMethod
+from app.models.payments import Payment, PaymentMethod, BankAccounts
 from faker import Faker
 import uuid
 import random
@@ -108,15 +108,20 @@ with app.app_context():
                 if random.choice([True, False]):  # Should be paid
                     try:
                         method = random.choice(list(PaymentMethod))
+                        bank_account = None
+
+                        if method == PaymentMethod.BANK:
+                            bank_account = random.choice(list(BankAccounts))
+
                         payment = Payment(
                             method=method,
-                            bank_account=fake.company() if method == PaymentMethod.BANK else None,
+                            bank_account=bank_account,
                             amount_paid=total,
                             is_paid=True,
                             payment_date=datetime.now(timezone.utc)
                         )
                         status = PaymentStatus.PAID
-                        print(f"💰 Creating paid purchase with method: {method.value}")
+                        print(f"💰 Creating paid purchase with method: {method.value}" + (f" | Bank: {bank_account.value}" if bank_account else ""))
                     except Exception as e:
                         print(f"❌ Failed to prepare payment: {e}")
                         payment = None
