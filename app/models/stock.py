@@ -14,3 +14,6 @@ class Stock(db.Model):
     unit_price = db.Column(db.Integer,nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # ✅ Add this relationship
+    item = db.relationship("Item", backref="stock", lazy=True)

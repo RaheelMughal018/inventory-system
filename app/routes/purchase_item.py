@@ -2,6 +2,7 @@ from flask import Blueprint, request, current_app
 from app.services.purchase_item import (
     get_all_purchases,
     create_purchase,
+    update_purchase_status
 )
 from app.common.response import SuccessResponse, ErrorResponse
 
@@ -26,6 +27,18 @@ def create_purchase_route():
         data = request.get_json()
         created = create_purchase(data)
         return SuccessResponse.send(created, message="purchase created successfully")
+    except Exception as e:
+        current_app.logger.error(f"Error creating purchase: {str(e)}")
+        return ErrorResponse.send(message=str(e), status_code=400)
+
+@purchase_bp.route('/<purchase_id>', methods=['PUT'])
+def update_purchase_status_route(purchase_id):
+    try:
+        current_app.logger.info(f"PUT /api/purchases/{purchase_id} HIT")
+        data = request.get_json()
+        update = update_purchase_status(purchase_id,data)
+        
+        return SuccessResponse.send(update, message="purchase status updated successfully")
     except Exception as e:
         current_app.logger.error(f"Error creating purchase: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=400)
