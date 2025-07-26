@@ -10,11 +10,12 @@ supplier_bp = Blueprint('suppliers', __name__)
 def fetch_suppliers():
     try:
         current_app.logger.info("GET /api/suppliers  HIT...")
+
         page = int(request.args.get("page", 1))
         limit = int(request.args.get("limit", 10))
         search = request.args.get("search", default=None, type=str)
-
         data = get_all_suppliers(page, limit, search)
+
         return SuccessResponse.send(data, message="Suppliers fetched successfully")
     except Exception as e:
         current_app.logger.error(f"Error fetching suppliers: {str(e)}")

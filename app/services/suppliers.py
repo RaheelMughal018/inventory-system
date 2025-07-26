@@ -10,12 +10,10 @@ from flask import current_app
 def get_all_suppliers(page, limit, search=None):
     try:
         base_query = Supplier.query
-#test line
         if search:
             base_query = base_query.filter(Supplier.name.ilike(f"%{search.strip()}%"))
 
         paginated = base_query.paginate(page=page, per_page=limit, error_out=False)
-
         return {
             "total": paginated.total,
             "pages": paginated.pages,
