@@ -1,5 +1,5 @@
 from app.models.payments import PaymentMethod, BankAccounts
-from app.models.purchase import PaymentStatus
+from app.models.purchase_item import PaymentStatus
 def validate_payment_details(data, payment_status):
     """
     Validates payment method and bank account when payment status is PAID.
