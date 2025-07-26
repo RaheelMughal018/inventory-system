@@ -14,6 +14,7 @@ def fetch_customers():
         search = request.args.get("search", default=None, type=str)
         current_app.logger.info("GET /api/customers  HIT...")
         data = get_all_customers(page,limit,search)
+
         return SuccessResponse.send(data, message="customers fetched successfully")
     except Exception as e:
         current_app.logger.error(f"Error fetching customers: {str(e)}")
