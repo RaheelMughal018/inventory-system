@@ -1,18 +1,27 @@
 
 from app.models.stock import Stock
+from app.models.item import Item
 from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
+from flask import request
+from sqlalchemy.orm import joinedload
 
 
 
 def get_all_stock(page, limit, search=None):
     try:
-        base_query = Stock.query
+        item_name = request.args.get("item_name")
+        item_type = request.args.get("item_type")
 
-        if search:
-            # Search by item name
-            base_query = base_query.join(Stock.item).filter(
-                (Stock.item.has(name=search)))
+        # Join Item table to allow filtering by item fields
+        base_query = Stock.query.join(Item).options(joinedload(Stock.item))
+
+        if item_name:
+            base_query = base_query.filter(Item.name.ilike(f"%{item_name.strip()}%"))
+
+        if item_type:
+            base_query = base_query.filter(Item.type.ilike(f"%{item_type.strip()}%"))
+
             
 
         paginated = base_query.paginate(page=page, per_page=limit, error_out=False)

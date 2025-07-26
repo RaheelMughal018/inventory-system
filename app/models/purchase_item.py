@@ -20,6 +20,6 @@ class Purchase(db.Model):
     purchase_date = db.Column(db.DateTime, nullable=False, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     # relationships
-    payment = db.relationship('Payment', backref='purchase', uselist=False)
+    payment = db.relationship('Payment', back_populates='purchase', uselist=False)
     item = db.relationship('Item', backref='purchases', lazy=True)
     supplier = db.relationship('Supplier', backref='purchases', lazy=True)

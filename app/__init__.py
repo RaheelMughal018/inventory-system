@@ -39,6 +39,9 @@ def create_app():
     from app.routes.payments import payment_bp 
     app.register_blueprint(payment_bp, url_prefix="/api/payments")
 
+    from app.routes.sale_item import sales_bp
+    app.register_blueprint(sales_bp, url_prefix="/api/sales")
+
 
 
     register_error_handlers(app)

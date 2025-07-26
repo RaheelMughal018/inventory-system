@@ -1,5 +1,5 @@
 from app.models.stock import  Stock
-from app.models.purchase import Purchase,PaymentStatus
+from app.models.purchase_item import Purchase,PaymentStatus
 from app.models.payments import Payment, PaymentMethod,BankAccounts
 from app.models.supplier import Supplier
 from app.models.item import Item

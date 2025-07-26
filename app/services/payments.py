@@ -1,12 +1,18 @@
 from app.models.payments import Payment, PaymentMethod, BankAccounts
-from app.models.purchase import Purchase
+from app.models.purchase_item import Purchase
 from app.models.item import Item
-from flask import current_app
+from flask import current_app, request
 from sqlalchemy.exc import SQLAlchemyError
 
 def get_all_payments(page=1, limit=10):
     try:
+        payment_method = request.args.get("payment_method")
         query = Payment.query.join(Purchase).join(Item)
+
+        # ✅ Filter by payment method if provided
+        if payment_method and payment_method.upper() in PaymentMethod.__members__:
+            query = query.filter(Payment.method == PaymentMethod[payment_method.upper()])
+
         paginated = query.paginate(page=page, per_page=limit, error_out=False)
 
         return {

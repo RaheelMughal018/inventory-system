@@ -2,8 +2,9 @@ from app import create_app, db
 from app.models.supplier import Supplier
 from app.models.customer import Customer
 from app.models.item import Item
+from app.models.sales_item import Sale
 from app.models.stock import Stock
-from app.models.purchase import Purchase, PaymentStatus
+from app.models.purchase_item import Purchase, PaymentStatus
 from app.models.payments import Payment, PaymentMethod, BankAccounts
 from faker import Faker
 import uuid
@@ -158,6 +159,80 @@ with app.app_context():
         db.session.commit()
         print(f"✅ Seeded {len(purchases)} purchases")
         print(f"✅ Seeded {len(payments)} payments")
+
+
+                # Seed sales and payments
+        print("🔄 Creating sales and payments...")
+        sales = []
+        sale_payments = []
+
+        for _ in range(30):
+            try:
+                item = random.choice(items)
+                customer = random.choice(customers)
+
+                stock = Stock.query.filter_by(item_id=item.item_id).first()
+                if not stock or stock.quantity < 1:
+                    continue  # Skip sale if no stock available
+
+                quantity = random.randint(1, min(stock.quantity, 10))
+                unit_price = round(random.uniform(100, 600), 2)
+                total = round(quantity * unit_price, 2)
+                sale_date = datetime.now(timezone.utc)
+
+                status = PaymentStatus.UNPAID.value
+                payment = None
+
+                if random.choice([True, False]):
+                    try:
+                        method = random.choice(list(PaymentMethod))
+                        bank_account = None
+                        if method == PaymentMethod.BANK:
+                            bank_account = random.choice(list(BankAccounts))
+
+                        payment = Payment(
+                            method=method,
+                            bank_account=bank_account,
+                            amount_paid=total,
+                            is_paid=True,
+                            payment_date=sale_date
+                        )
+                        status = PaymentStatus.PAID.value
+                        print(f"🧾 Creating paid sale with method: {method.value}" + (f" | Bank: {bank_account.value}" if bank_account else ""))
+                    except Exception as e:
+                        print(f"❌ Failed to prepare sale payment: {e}")
+                        payment = None
+                        status = PaymentStatus.UNPAID.value
+
+                # Create the sale
+                sale = Sale(
+                    item_id=item.item_id,
+                    customer_id=customer.customer_id,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    total_amount=total,
+                    payment_status=status,
+                    sale_date=sale_date
+                )
+                db.session.add(sale)
+                db.session.flush()
+
+                if payment:
+                    payment.sale_id = sale.sale_id
+                    db.session.add(payment)
+                    sale_payments.append(payment)
+
+                # Update stock
+                stock.quantity -= quantity
+                sales.append(sale)
+
+            except Exception as e:
+                print(f"❌ Error creating sale/payment: {e}")
+
+        db.session.commit()
+        print(f"✅ Seeded {len(sales)} sales")
+        print(f"✅ Seeded {len(sale_payments)} sale payments")
+
 
         print("🎉 All data seeded successfully!")
 
