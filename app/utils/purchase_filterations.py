@@ -1,4 +1,4 @@
-from app.models.purchase import Purchase, PaymentStatus
+from app.models.purchase_item import Purchase, PaymentStatus
 from app.models.payments import Payment, PaymentMethod
 from app.models.item import Item
 from flask import current_app 
