@@ -6,19 +6,21 @@ from app.common.response import SuccessResponse, ErrorResponse
 from flask import current_app
 customer_bp = Blueprint('customers', __name__)
 
-@customer_bp.route('/', methods=['GET'])
+@customer_bp.route('', methods=['GET'])
 def fetch_customers():
     try:
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 10))
+        search = request.args.get("search", default=None, type=str)
         current_app.logger.info("GET /api/customers  HIT...")
-        data = get_all_customers(page,limit)
+        data = get_all_customers(page,limit,search)
+
         return SuccessResponse.send(data, message="customers fetched successfully")
     except Exception as e:
         current_app.logger.error(f"Error fetching customers: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=500)
 
-@customer_bp.route('/',methods=['POST'])
+@customer_bp.route('',methods=['POST'])
 def create_customers():
     try:
         current_app.logger.info("POST /api/customers  HIT...")
