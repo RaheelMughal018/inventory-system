@@ -130,7 +130,7 @@ def delete_customer(customer_id):
         db.session.delete(customer)
         db.session.commit()
         return {
-            'customer_id': str(customer.id),
+            'customer_id': str(customer.customer_id),
             'name': customer.name,
             'phone': customer.phone,
             'address': customer.address,
