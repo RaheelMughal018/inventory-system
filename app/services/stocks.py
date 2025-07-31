@@ -36,6 +36,7 @@ def get_all_stock(page, limit, search=None):
                     'stock_id': str(c.stock_id),
                     'quantity': c.quantity,
                     'unit_price': c.unit_price,
+                    'amount': c.amount,
                     'created_at': c.created_at.isoformat() if c.created_at else None,
                     'updated_at': c.updated_at.isoformat() if c.updated_at else None,
                     'item': {

@@ -4,7 +4,7 @@ from app.models.payments import Payment, PaymentMethod, BankAccounts
 from app.models.customer import Customer
 from app.models.item import Item
 from sqlalchemy.exc import SQLAlchemyError
-from app.utils.purchase_filterations import apply_purchase_filters
+from app.utils.filteration import apply_filters
 from app.utils.payment_validation import validate_payment_details
 from app.utils.update_or_create_stock import update_or_create_stock
 
@@ -21,7 +21,7 @@ def get_all_sales(page, limit):
             .join(Customer, Customer.customer_id == Sale.customer_id)
             .outerjoin(Payment, Payment.sale_id == Sale.sale_id)
         )
-        query = apply_purchase_filters(query, request.args)
+        query = apply_filters(query, request.args, model_type='sale')
         paginated = query.paginate(page=page, per_page=limit, error_out=False)
 
         return {
@@ -75,7 +75,10 @@ def create_sale(data):
         if payment_status_str.upper() not in PaymentStatus.__members__:
             raise ValueError("Invalid payment status")
         payment_status = PaymentStatus[payment_status_str.upper()]
-
+         # check the quantity is greater than zero 
+        if quantity < 0:
+            raise ValueError("Quantity should be greater than 0")
+        
         item = Item.query.filter_by(name=item_name, type=item_type).first()
         if not item:
             item = Item(name=item_name, type=item_type)
@@ -83,7 +86,7 @@ def create_sale(data):
             db.session.flush()
 
         item_id = item.item_id
-        unit_price = total_amount / quantity if quantity > 0 else 0
+        unit_price = total_amount / quantity
 
         sale = Sale(
             item_id=item_id,
@@ -98,7 +101,7 @@ def create_sale(data):
         db.session.flush()
 
         try:
-            stock, is_new = update_or_create_stock(item_id, -quantity)
+            stock, is_new = update_or_create_stock(item_id, -quantity,unit_price,-total_amount)
             if is_new:
                 db.session.add(stock)
         except ValueError as ve:
