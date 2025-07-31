@@ -1,5 +1,5 @@
 from flask import Blueprint, request, current_app
-from app.services.sale_item import get_all_sales,create_sale
+from app.services.sale_item import get_all_sales,create_sale,update_sale_status
 from app.common.response import SuccessResponse, ErrorResponse
 
 sales_bp = Blueprint('sales', __name__)
@@ -27,14 +27,13 @@ def create_purchase_route():
         current_app.logger.error(f"Error sales purchase: {str(e)}")
         return ErrorResponse.send(message=str(e), status_code=400)
 
-# @purchase_bp.route('/<purchase_id>', methods=['PUT'])
-# def update_purchase_status_route(purchase_id):
-#     try:
-#         current_app.logger.info(f"PUT /api/purchases/{purchase_id} HIT")
-#         data = request.get_json()
-#         update = update_purchase_status(purchase_id,data)
-        
-#         return SuccessResponse.send(update, message="purchase status updated successfully")
-#     except Exception as e:
-#         current_app.logger.error(f"Error creating purchase: {str(e)}")
-#         return ErrorResponse.send(message=str(e), status_code=400)
+@sales_bp.route('/<sale_id>/status', methods=['PUT'])
+def update_sale_status_route(sale_id):
+    try:
+        current_app.logger.info(f"PUT /api/sales/{sale_id}/status HIT")
+        data = request.get_json()
+        update = update_sale_status(sale_id, data)
+        return SuccessResponse.send(update, message="sale status updated successfully")
+    except Exception as e:
+        current_app.logger.error(f"Error updating sale status: {str(e)}")
+        return ErrorResponse.send(message=str(e), status_code=400)
