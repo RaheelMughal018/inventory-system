@@ -6,7 +6,7 @@ from app.models.item import Item
 from sqlalchemy.exc import SQLAlchemyError
 from app.utils.filteration import apply_filters
 from app.utils.payment_validation import validate_payment_details
-from app.utils.update_or_create_stock import update_or_create_stock
+from app.utils.stock_update import sell_stock
 
 from app import db
 from datetime import datetime, timezone
@@ -33,7 +33,6 @@ def get_all_sales(page, limit):
                 {
                     "sale_id": s.sale_id,
                     "quantity": s.quantity,
-                    "unit_price": s.unit_price,
                     "total_amount": s.total_amount,
                     "payment_status": s.payment_status.value,
                     "sale_date": s.sale_date,
@@ -86,13 +85,10 @@ def create_sale(data):
             db.session.flush()
 
         item_id = item.item_id
-        unit_price = total_amount / quantity
-
         sale = Sale(
             item_id=item_id,
             customer_id=customer_id,
             quantity=quantity,
-            unit_price=unit_price,
             total_amount=total_amount,
             payment_status=payment_status,
             sale_date=datetime.now(timezone.utc),
@@ -101,9 +97,7 @@ def create_sale(data):
         db.session.flush()
 
         try:
-            stock, is_new = update_or_create_stock(item_id, -quantity,unit_price,-total_amount)
-            if is_new:
-                db.session.add(stock)
+            stock = sell_stock(item_id, quantity)
         except ValueError as ve:
             raise RuntimeError(f"Stock error: {str(ve)}")
 
@@ -141,7 +135,6 @@ def create_sale(data):
             "data": {
                 "id": sale.sale_id,
                 "quantity": sale.quantity,
-                "unit_price": sale.unit_price,
                 "total_amount": sale.total_amount,
                 "payment_status": sale.payment_status.value,
                 "sale_date": sale.sale_date,
