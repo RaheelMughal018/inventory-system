@@ -155,7 +155,7 @@ def create_sale(data):
                     "display": f"{item.name} - {item.type}"
                 },
                 "customer": {
-                    "id": customer.customer_id,
+                    "customer_id": customer.customer_id,
                     "name": customer.name
                 }
             }

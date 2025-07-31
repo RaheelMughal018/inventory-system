@@ -50,7 +50,7 @@ def get_all_customers(page, limit, search_query=None):
             "per_page": paginated.per_page,
             "data": [
                 {
-                    'id': str(c.id),
+                    'customer_id': str(c.id),
                     'name': c.name,
                     'phone': c.phone,
                     'address': c.address,
@@ -71,7 +71,7 @@ def get_all_customers(page, limit, search_query=None):
 def create_customer(data):
     try:
         new_customer = Customer(
-            id = str(uuid.uuid4()),
+            customer_id = str(uuid.uuid4()),
             name = data.get('name'),
             phone = data.get('phone'),
             address = data.get('address'),
@@ -83,7 +83,7 @@ def create_customer(data):
 
 
         return {
-            'id': new_customer.id,
+            'customer_id': new_customer.id,
             'name': new_customer.name,
             'phone': new_customer.phone,
             'address': new_customer.address,
@@ -109,7 +109,7 @@ def update_customer(customer_id, data):
 
         db.session.commit()
         return {
-            'id': str(customer.id),
+            'customer_id': str(customer.id),
             'name': customer.name,
             'phone': customer.phone,
             'address': customer.address,
@@ -130,7 +130,7 @@ def delete_customer(customer_id):
         db.session.delete(customer)
         db.session.commit()
         return {
-            'id': str(customer.id),
+            'customer_id': str(customer.id),
             'name': customer.name,
             'phone': customer.phone,
             'address': customer.address,
@@ -150,7 +150,7 @@ def get_customer_by_id(customer_id):
         if not customer:
             return None
         return {
-            'id': str(customer.id),
+            'customer_id': str(customer.id),
             'name': customer.name,
             'phone': customer.phone,
             'address': customer.address,
