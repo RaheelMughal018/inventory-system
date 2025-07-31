@@ -5,8 +5,7 @@ from app.models.supplier import Supplier
 from app.models.item import Item
 from sqlalchemy.exc import SQLAlchemyError
 from app.utils.filteration import apply_filters
-from app.utils.payment_validation import validate_payment_details
-from app.utils.update_or_create_stock import update_or_create_stock
+from app.utils.stock_update import purchase_stock
 
 from app import db
 from datetime import datetime,timezone
@@ -32,7 +31,6 @@ def get_all_purchases(page, limit):
                 {
                     "purchase_id": p.purchase_id,
                     "quantity": p.quantity,
-                    "unit_price": p.unit_price,
                     "total_amount": p.total_amount,
                     "payment_status": p.payment_status.value,
                     "purchase_date": p.purchase_date,
@@ -95,7 +93,6 @@ def create_purchase(data):
             item_id=item_id,
             supplier_id=supplier_id,
             quantity=quantity,
-            unit_price=unit_price,
             total_amount=total_amount,
             payment_status=payment_status,
             purchase_date=datetime.now(timezone.utc),
@@ -104,7 +101,7 @@ def create_purchase(data):
         db.session.flush()
 
         # Update or create stock
-        stock, is_new = update_or_create_stock(item_id, quantity,unit_price,total_amount)
+        stock, is_new = purchase_stock(item_id, quantity,unit_price,total_amount)
         if is_new:
             db.session.add(stock)
 
@@ -145,7 +142,6 @@ def create_purchase(data):
             "data": {
                 "id": purchase.purchase_id,
                 "quantity": purchase.quantity,
-                "unit_price": purchase.unit_price,
                 "total_amount": purchase.total_amount,
                 "payment_status": purchase.payment_status.value,
                 "purchase_date": purchase.purchase_date,
@@ -225,54 +221,4 @@ def update_purchase_status(purchase_id, data):
         current_app.logger.error(f"Error updating purchase status: {str(e)}")
         raise RuntimeError(f"Update purchase status failed: {str(e)}")
 
-def update_purchase_status(purchase_id, data):
-    try:
-        purchase = Purchase.query.get(purchase_id)
-        if not purchase:
-            raise ValueError("Purchase not found")
 
-        if purchase.payment_status == PaymentStatus.PAID:
-            raise ValueError("Purchase is already marked as PAID")
-
-        payment_status_str = data.get("payment_status")
-        if not payment_status_str or payment_status_str.upper() != "PAID":
-            raise ValueError("Only status update to PAID is allowed")
-
-        payment_method_str = data.get("payment_method")
-        if not payment_method_str or payment_method_str.upper() not in PaymentMethod.__members__:
-            raise ValueError("Invalid or missing payment method")
-
-        method_enum = PaymentMethod[payment_method_str.upper()]
-        bank_account_enum = None
-
-        if method_enum == PaymentMethod.BANK:
-            bank_account_str = data.get("bank_account")
-            if not bank_account_str or bank_account_str.upper() not in BankAccounts.__members__:
-                raise ValueError("Missing or invalid bank account for BANK payment")
-            bank_account_enum = BankAccounts[bank_account_str.upper()]
-
-        payment = Payment(
-            purchase_id=purchase.purchase_id,
-            method=method_enum,
-            bank_account=bank_account_enum,
-            amount_paid=purchase.total_amount,
-            is_paid=True,
-            payment_date=datetime.now(timezone.utc)
-        )
-        db.session.add(payment)
-
-        purchase.payment_status = PaymentStatus.PAID
-        db.session.commit()
-
-        return {
-            "message": "Purchase status updated to PAID successfully",
-            "purchase_id": purchase.purchase_id,
-            "payment_method": method_enum.value,
-            "bank_account": bank_account_enum.value if bank_account_enum else None,
-            "payment_date": payment.payment_date
-        }
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error updating purchase status: {str(e)}")
-        raise RuntimeError(f"Update purchase status failed: {str(e)}")

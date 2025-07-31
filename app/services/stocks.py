@@ -23,7 +23,7 @@ def get_all_stock(page, limit, search=None):
             base_query = base_query.filter(Item.type.ilike(f"%{item_type.strip()}%"))
 
             
-
+        base_query = base_query.order_by(Stock.created_at.desc())
         paginated = base_query.paginate(page=page, per_page=limit, error_out=False)
 
         return {

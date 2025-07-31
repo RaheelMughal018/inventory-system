@@ -14,7 +14,6 @@ class Purchase(db.Model):
     item_id = db.Column(db.String(36), db.ForeignKey('items.item_id'))
     supplier_id = db.Column(db.String(36), db.ForeignKey('suppliers.supplier_id'))
     quantity = db.Column(db.Integer)
-    unit_price = db.Column(db.Float)
     total_amount = db.Column(db.Float)
     payment_status = db.Column(Enum(PaymentStatus))
     purchase_date = db.Column(db.DateTime, nullable=False, default=datetime.now)

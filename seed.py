@@ -6,6 +6,8 @@ from app.models.sales_item import Sale
 from app.models.stock import Stock
 from app.models.purchase_item import Purchase, PaymentStatus
 from app.models.payments import Payment, PaymentMethod, BankAccounts
+from app.utils.stock_update import purchase_stock, sell_stock  
+
 from faker import Faker
 import uuid
 import random
@@ -13,22 +15,6 @@ from datetime import datetime, timezone
 
 fake = Faker()
 app = create_app()
-
-def update_or_create_stock(item_id, quantity_delta, unit_price, total_amount_delta):
-    stock = Stock.query.filter_by(item_id=item_id).first()
-    if stock:
-        stock.quantity += quantity_delta
-        stock.amount += total_amount_delta
-        stock.unit_price = stock.amount / stock.quantity if stock.quantity > 0 else 0
-        return stock, False
-    else:
-        new_stock = Stock(
-            item_id=item_id,
-            quantity=quantity_delta,
-            unit_price=unit_price,
-            amount=total_amount_delta
-        )
-        return new_stock, True
 
 with app.app_context():
     try:
@@ -97,9 +83,14 @@ with app.app_context():
         for _ in range(30):
             item = random.choice(items)
             supplier = random.choice(suppliers)
+
             quantity = random.randint(1, 20)
             unit_price = round(random.uniform(50, 500), 2)
             total = round(quantity * unit_price, 2)
+
+            if quantity <= 0 or unit_price <= 0 or total <= 0:
+                continue  # skip invalid entries
+
             status = PaymentStatus.UNPAID
             payment = None
 
@@ -120,7 +111,6 @@ with app.app_context():
                 item_id=item.item_id,
                 supplier_id=supplier.supplier_id,
                 quantity=quantity,
-                unit_price=unit_price,
                 total_amount=total,
                 payment_status=status,
                 purchase_date=datetime.now(timezone.utc)
@@ -133,9 +123,12 @@ with app.app_context():
                 db.session.add(payment)
                 payments.append(payment)
 
-            stock, is_new = update_or_create_stock(item.item_id, quantity, unit_price, total)
-            if is_new:
-                db.session.add(stock)
+            try:
+                stock, is_new = purchase_stock(item.item_id, quantity, unit_price, total)
+                if is_new:
+                    db.session.add(stock)
+            except Exception as e:
+                print(f"⚠️ Stock update failed during purchase: {e}")
 
             purchases.append(purchase)
 
@@ -157,6 +150,10 @@ with app.app_context():
             quantity = random.randint(1, min(stock.quantity, 10))
             unit_price = round(random.uniform(100, 600), 2)
             total = round(quantity * unit_price, 2)
+
+            if quantity <= 0 or unit_price <= 0 or total <= 0:
+                continue
+
             status = PaymentStatus.UNPAID.value
             payment = None
 
@@ -177,7 +174,6 @@ with app.app_context():
                 item_id=item.item_id,
                 customer_id=customer.customer_id,
                 quantity=quantity,
-                unit_price=unit_price,
                 total_amount=total,
                 payment_status=status,
                 sale_date=datetime.now(timezone.utc)
@@ -190,9 +186,12 @@ with app.app_context():
                 db.session.add(payment)
                 sale_payments.append(payment)
 
-            stock, is_new = update_or_create_stock(item.item_id, -quantity, unit_price, -total)
-            if is_new:
-                db.session.add(stock)
+            try:
+                stock = sell_stock(item.item_id, quantity, total)
+            except Exception as e:
+                print(f"⚠️ Stock update failed during sale: {e}")
+                db.session.rollback()
+                continue
 
             sales.append(sale)
 
@@ -204,3 +203,4 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"❌ SEEDING FAILED: {e}")
+
