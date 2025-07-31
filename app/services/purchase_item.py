@@ -4,7 +4,7 @@ from app.models.payments import Payment, PaymentMethod,BankAccounts
 from app.models.supplier import Supplier
 from app.models.item import Item
 from sqlalchemy.exc import SQLAlchemyError
-from app.utils.purchase_filterations import apply_purchase_filters
+from app.utils.filteration import apply_filters
 from app.utils.payment_validation import validate_payment_details
 from app.utils.update_or_create_stock import update_or_create_stock
 
@@ -20,7 +20,7 @@ def get_all_purchases(page, limit):
             .join(Supplier, Supplier.supplier_id == Purchase.supplier_id)
             .outerjoin(Payment, Payment.purchase_id == Purchase.purchase_id)
         )
-        query = apply_purchase_filters(query, request.args)
+        query = apply_filters(query, request.args, model_type='purchase')
         paginated = query.paginate(page=page, per_page=limit, error_out=False)
 
         return {
@@ -77,7 +77,9 @@ def create_purchase(data):
         if payment_status_str.upper() not in PaymentStatus.__members__:
             raise ValueError("Invalid payment status")
         payment_status = PaymentStatus[payment_status_str.upper()]
-
+        # check the quantity is greater than zero 
+        if quantity < 0:
+            raise ValueError("Quantity should be greater than 0")
         # Check if item exists or create new
         item = Item.query.filter_by(name=item_name, type=item_type).first()
         if not item:
@@ -86,7 +88,7 @@ def create_purchase(data):
             db.session.flush()
 
         item_id = item.item_id
-        unit_price = total_amount / quantity if quantity > 0 else 0
+        unit_price = total_amount / quantity
 
         # Create purchase
         purchase = Purchase(
@@ -102,7 +104,7 @@ def create_purchase(data):
         db.session.flush()
 
         # Update or create stock
-        stock, is_new = update_or_create_stock(item_id, quantity)
+        stock, is_new = update_or_create_stock(item_id, quantity,unit_price,total_amount)
         if is_new:
             db.session.add(stock)
 

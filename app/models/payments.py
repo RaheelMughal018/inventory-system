@@ -22,7 +22,6 @@ class Payment(db.Model):
     bank_account = db.Column(Enum(BankAccounts), nullable=True)
     amount_paid = db.Column(db.Float)
     is_paid = db.Column(db.Boolean, default=False)
-    
     payment_date = db.Column(db.DateTime, nullable=True)
 
      # 🔁 Relationships (optional but useful)
