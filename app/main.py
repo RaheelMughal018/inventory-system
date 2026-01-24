@@ -6,6 +6,7 @@ from app.api.v1 import auth, user
 app = FastAPI(title="Power Genix", version="1.0.0")
 
 origins = [
+    "http://localhost:5173",
     "http://localhost:3000",
     # "https://dev-app.modernremodelingmd.com",
     # "https://app.modernremodelingmd.com"

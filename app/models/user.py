@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Enum, ForeignKey, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Enum, ForeignKey, Integer, String, DateTime, Boolean, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -54,8 +54,20 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Basic profile info (common for all users)
     profile_picture = Column(String(500), nullable=True)
-
+    phone = Column(String(20), nullable=True)
+    city = Column(String(100), nullable=True)
+    # Business/Company details (for suppliers and customers)
+    company_name = Column(String(255), nullable=True)
+    
+    # Financial tracking fields (for suppliers and customers only)
+    # These will be NULL for owner role
+    total_transactions = Column(Numeric(15, 2), default=0.00)  # Total amount of all purchases/sales
+    total_paid = Column(Numeric(15, 2), default=0.00)  # Total paid/received
+    current_balance = Column(Numeric(15, 2), default=0.00)  # Outstanding balance
+    
     # Foreign key to user
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)  
     user = relationship("User", back_populates="profile")
@@ -64,4 +76,19 @@ class UserProfile(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self):
-        return f"<UserProfile(user_id={self.user_id})>"
+        return f"<UserProfile(user_id={self.user_id}, company='{self.company_name}')>"
+    
+    @property
+    def is_supplier(self):
+        """Check if this profile belongs to a supplier"""
+        return self.user.role == UserRole.supplier
+    
+    @property
+    def is_customer(self):
+        """Check if this profile belongs to a customer"""
+        return self.user.role == UserRole.customer
+    
+    @property
+    def balance_due(self):
+        """Alias for current_balance for better readability"""
+        return self.current_balance

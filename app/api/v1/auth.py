@@ -1,3 +1,4 @@
+from email import message
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -6,8 +7,9 @@ from app.core.dependencies import get_db
 from app.core.security import create_access_token
 from app.core.config import settings
 from app.services.user_service import authenticate_user, create_user, get_all_users
-from app.schemas.auth import LoginRequest, LoginResponse, Token, RegisterRequest
+from app.schemas.auth import LoginRequest, LoginResponse, Logout, Token, RegisterRequest
 from app.logger_config import logger
+from app.models.user import UserRole
 
 router = APIRouter()
 
@@ -35,7 +37,7 @@ def register(
             email=register_data.email,
             password=register_data.password,
             name=register_data.name,
-            role=register_data.role,
+            role=UserRole.owner,
             created_by_id=None  # First user has no creator
         )
         
@@ -83,6 +85,7 @@ def login(
     Login endpoint - Authenticate user and return JWT token.
     """
     try:
+        print("Here==============")
         logger.info(f"Login attempt for email: {login_data.email}")
         
         # Authenticate user
@@ -122,6 +125,15 @@ def login(
             detail="An error occurred during login"
         )
 
+@router.get("/logout", response_model=Logout)
+def logout():
+    """
+    logout the user
+    """
+    logger.info("User Logged out")
+    return Logout(
+        message="Logged out Successfully"
+    )
 
 @router.post("/token", response_model=Token)
 def login_for_access_token(
@@ -131,7 +143,7 @@ def login_for_access_token(
     """
     OAuth2 compatible token endpoint (for Swagger UI authentication).
     """
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = authenticate_user(db, form_data.name, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
