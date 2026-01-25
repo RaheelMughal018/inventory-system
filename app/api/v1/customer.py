@@ -12,6 +12,7 @@ from app.services.customer_service import (
 )
 from app.schemas.customer import (
     CustomerCreate,
+    CustomerDeleteResponse,
     CustomerUpdate,
     CustomerResponse,
     CustomerListResponse
@@ -225,7 +226,7 @@ def update_customer_route(
         )
 
 
-@router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{customer_id}", response_model=CustomerDeleteResponse)
 def delete_customer_route(
     customer_id: int,
     current_user: User = Depends(get_current_active_user),
@@ -248,21 +249,13 @@ def delete_customer_route(
             detail="You cannot delete yourself"
         )
     
-    try:
-        success = delete_customer(db, customer_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="customer not found"
-            )
-        
-        logger.info(f"customer {customer_id} deleted by {current_user.email}")
-        return None
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting customer: {str(e)}")
+    success = delete_customer(db, customer_id)
+    if not success:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete customer"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
         )
+
+    return CustomerDeleteResponse(
+        message="Supplier deleted successfully"
+    )

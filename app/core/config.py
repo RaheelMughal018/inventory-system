@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # Other settings
     SECRET_KEY: str = ""
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
 
     class Config:
         env_file = ".env" if os.getenv("APP_ENV", "local") == "local" else ".env.prod"

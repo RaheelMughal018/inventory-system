@@ -38,3 +38,6 @@ class SupplierResponse(SupplierBase):
 class SupplierListResponse(BaseModel):
     total: int
     suppliers: list[SupplierResponse]
+
+class SupplierDeleteResponse(BaseModel):
+    message: str

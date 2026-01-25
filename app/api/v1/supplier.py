@@ -14,7 +14,8 @@ from app.schemas.supplier import (
     SupplierCreate,
     SupplierUpdate,
     SupplierResponse,
-    SupplierListResponse
+    SupplierListResponse,
+    SupplierDeleteResponse
 )
 from app.logger_config import logger
 
@@ -224,45 +225,31 @@ def update_supplier_route(
             detail="Failed to update supplier"
         )
 
-
-@router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{supplier_id}", response_model=SupplierDeleteResponse)
 def delete_supplier_route(
     supplier_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Delete a supplier.
-    Requires authentication.
-    Only owners can delete suppliers, and users cannot delete themselves.
-    """
     if current_user.role != UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owners can delete suppliers"
         )
-    
+
     if supplier_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot delete yourself"
         )
-    
-    try:
-        success = delete_supplier(db, supplier_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Supplier not found"
-            )
-        
-        logger.info(f"Supplier {supplier_id} deleted by {current_user.email}")
-        return None
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting supplier: {str(e)}")
+
+    success = delete_supplier(db, supplier_id)
+    if not success:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete supplier"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
         )
+
+    return SupplierDeleteResponse(
+        message="Supplier deleted successfully"
+    )

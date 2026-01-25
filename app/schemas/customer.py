@@ -38,3 +38,7 @@ class CustomerResponse(CustomerBase):
 class CustomerListResponse(BaseModel):
     total: int
     customers: list[CustomerResponse]
+
+
+class CustomerDeleteResponse(BaseModel):
+    message: str
