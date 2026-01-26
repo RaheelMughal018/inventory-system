@@ -62,12 +62,6 @@ class UserProfile(Base):
     # Business/Company details (for suppliers and customers)
     company_name = Column(String(255), nullable=True)
     
-    # Financial tracking fields (for suppliers and customers only)
-    # These will be NULL for owner role
-    total_transactions = Column(Numeric(15, 2), default=0.00)  # Total amount of all purchases/sales
-    total_paid = Column(Numeric(15, 2), default=0.00)  # Total paid/received
-    current_balance = Column(Numeric(15, 2), default=0.00)  # Outstanding balance
-    
     # Foreign key to user
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)  
     user = relationship("User", back_populates="profile")

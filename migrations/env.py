@@ -17,6 +17,10 @@ from app.core.config import settings
 
 # Import all models so Alembic can detect them
 from app.models.user import User, UserProfile  # noqa
+from app.models.item_category import Item, Category  # noqa
+from app.models.payment import Payment, PaymentAccount# noqa
+from app.models.financial_ledger import FinancialLedger
+from app.models.stock import PurchaseInvoice, PurchaseItem, SaleInvoice, SaleItem, Stock  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
