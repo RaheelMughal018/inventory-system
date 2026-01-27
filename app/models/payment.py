@@ -25,7 +25,7 @@ class PaymentAccount(Base):
     type = Column(Enum(PaymentAccountType),nullable=False) # Cash, Bank, JazzCash 
 
     created_at = Column(DateTime, server_default=func.now())
-    payments = relationship("Payment", back_populates="accounts")
+    payments = relationship("Payment", back_populates="account")
 
 
 class Payment(Base):
