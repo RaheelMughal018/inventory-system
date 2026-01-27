@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.common.error_handlers import register_error_handlers
-from app.api.v1 import auth, customer, user, supplier, item, category,account
+from app.api.v1 import auth, customer, purchase, user, supplier, item, category,account
 
 app = FastAPI(title="Power Genix", version="1.0.0")
 
@@ -30,6 +30,7 @@ app.include_router(customer.router, prefix="/api/v1/customers", tags=["customers
 app.include_router(item.router, prefix="/api/v1/items", tags=["items"])
 app.include_router(category.router, prefix="/api/v1/categories", tags=["categories"])
 app.include_router(account.router, prefix="/api/v1/accounts", tags=["accounts"])
+app.include_router(purchase.router, prefix="/api/v1/purchase", tags=["purchase"])
 
 
 
