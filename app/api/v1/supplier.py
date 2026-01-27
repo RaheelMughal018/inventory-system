@@ -51,9 +51,9 @@ def get_suppliers(
                 created_at=supplier.created_at,
                 updated_at=supplier.updated_at,
                 created_by_id=supplier.created_by_id,
-                total_transactions=profile.total_transactions if profile else None,
-                total_paid=profile.total_paid if profile else None,
-                current_balance=profile.current_balance if profile else None,
+                # total_transactions=profile.total_transactions if profile else None,
+                # total_paid=profile.total_paid if profile else None,
+                # current_balance=profile.current_balance if profile else None,
                 profile_picture=profile.profile_picture if profile else None
             ))
         
@@ -98,9 +98,9 @@ def get_supplier(
         created_at=supplier.created_at,
         updated_at=supplier.updated_at,
         created_by_id=supplier.created_by_id,
-        total_transactions=profile.total_transactions if profile else None,
-        total_paid=profile.total_paid if profile else None,
-        current_balance=profile.current_balance if profile else None,
+        # total_transactions=profile.total_transactions if profile else None,
+        # total_paid=profile.total_paid if profile else None,
+        # current_balance=profile.current_balance if profile else None,
         profile_picture=profile.profile_picture if profile else None
     )
 
@@ -140,9 +140,9 @@ def create_supplier_route(
             created_at=supplier.created_at,
             updated_at=supplier.updated_at,
             created_by_id=supplier.created_by_id,
-            total_transactions=profile.total_transactions if profile else None,
-            total_paid=profile.total_paid if profile else None,
-            current_balance=profile.current_balance if profile else None,
+            # total_transactions=profile.total_transactions if profile else None,
+            # total_paid=profile.total_paid if profile else None,
+            # current_balance=profile.current_balance if profile else None,
             profile_picture=profile.profile_picture if profile else None
         )
     except ValueError as e:
@@ -182,7 +182,6 @@ def update_supplier_route(
             db=db,
             supplier_id=supplier_id,
             name=supplier_data.name,
-            email=supplier_data.email,
             company_name=supplier_data.company_name,
             phone=supplier_data.phone,
             city=supplier_data.city
@@ -200,7 +199,6 @@ def update_supplier_route(
         return SupplierResponse(
             id=supplier.id,
             user_id=supplier.user_id,
-            email=supplier.email,
             name=supplier.name,
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
@@ -208,9 +206,9 @@ def update_supplier_route(
             created_at=supplier.created_at,
             updated_at=supplier.updated_at,
             created_by_id=supplier.created_by_id,
-            total_transactions=profile.total_transactions if profile else None,
-            total_paid=profile.total_paid if profile else None,
-            current_balance=profile.current_balance if profile else None,
+            # total_transactions=profile.total_transactions if profile else None,
+            # total_paid=profile.total_paid if profile else None,
+            # current_balance=profile.current_balance if profile else None,
             profile_picture=profile.profile_picture if profile else None
         )
     except ValueError as e:

@@ -51,9 +51,9 @@ def get_customers(
                 created_at=customer.created_at,
                 updated_at=customer.updated_at,
                 created_by_id=customer.created_by_id,
-                total_transactions=profile.total_transactions if profile else None,
-                total_paid=profile.total_paid if profile else None,
-                current_balance=profile.current_balance if profile else None,
+                # total_transactions=profile.total_transactions if profile else None,
+                # total_paid=profile.total_paid if profile else None,
+                # current_balance=profile.current_balance if profile else None,
                 profile_picture=profile.profile_picture if profile else None
             ))
         
@@ -98,9 +98,9 @@ def get_customer(
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         created_by_id=customer.created_by_id,
-        total_transactions=profile.total_transactions if profile else None,
-        total_paid=profile.total_paid if profile else None,
-        current_balance=profile.current_balance if profile else None,
+        # total_transactions=profile.total_transactions if profile else None,
+        # total_paid=profile.total_paid if profile else None,
+        # current_balance=profile.current_balance if profile else None,
         profile_picture=profile.profile_picture if profile else None
     )
 
@@ -140,9 +140,9 @@ def create_customer_route(
             created_at=customer.created_at,
             updated_at=customer.updated_at,
             created_by_id=customer.created_by_id,
-            total_transactions=profile.total_transactions if profile else None,
-            total_paid=profile.total_paid if profile else None,
-            current_balance=profile.current_balance if profile else None,
+            # total_transactions=profile.total_transactions if profile else None,
+            # total_paid=profile.total_paid if profile else None,
+            # current_balance=profile.current_balance if profile else None,
             profile_picture=profile.profile_picture if profile else None
         )
     except ValueError as e:
@@ -182,7 +182,6 @@ def update_customer_route(
             db=db,
             customer_id=customer_id,
             name=customer_data.name,
-            email=customer_data.email,
             company_name=customer_data.company_name,
             phone=customer_data.phone,
             city=customer_data.city
@@ -200,7 +199,6 @@ def update_customer_route(
         return CustomerResponse(
             id=customer.id,
             user_id=customer.user_id,
-            email=customer.email,
             name=customer.name,
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
@@ -208,9 +206,9 @@ def update_customer_route(
             created_at=customer.created_at,
             updated_at=customer.updated_at,
             created_by_id=customer.created_by_id,
-            total_transactions=profile.total_transactions if profile else None,
-            total_paid=profile.total_paid if profile else None,
-            current_balance=profile.current_balance if profile else None,
+            # total_transactions=profile.total_transactions if profile else None,
+            # total_paid=profile.total_paid if profile else None,
+            # current_balance=profile.current_balance if profile else None,
             profile_picture=profile.profile_picture if profile else None
         )
     except ValueError as e:

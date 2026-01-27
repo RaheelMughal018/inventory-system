@@ -7,7 +7,7 @@ from app.core.database import Base
 class FinancialLedger(Base):
     __tablename__ = "financial_ledger"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
@@ -19,4 +19,4 @@ class FinancialLedger(Base):
 
     created_at = Column(DateTime, server_default=func.now())
 
-    user = relationship("User")
+    user = relationship("User", back_populates='ledger_entries')

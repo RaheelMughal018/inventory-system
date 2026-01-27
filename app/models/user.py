@@ -5,6 +5,7 @@ import enum
 import secrets
 import string
 from app.core.database import Base
+from app.models import payment
 
 
 class UserRole(str, enum.Enum):
@@ -31,6 +32,8 @@ class User(Base):
     # Relationships
     creator = relationship("User", remote_side=[id], backref="users_created") 
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    ledger_entries = relationship("FinancialLedger", back_populates="user", cascade="all, delete-orphan")
+    payment = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
 
     @staticmethod
     def generate_user_id(role: UserRole) -> str:
@@ -84,5 +87,7 @@ class UserProfile(Base):
     
     @property
     def balance_due(self):
-        """Alias for current_balance for better readability"""
-        return self.current_balance
+        """Calculate balance due from financial ledger entries"""
+        # This should be calculated from FinancialLedger entries
+        # For now, return 0.00 - implement calculation in service layer
+        return 0.00

@@ -27,9 +27,9 @@ class SupplierResponse(SupplierBase):
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
-    total_transactions: Optional[Decimal] = None
-    total_paid: Optional[Decimal] = None
-    current_balance: Optional[Decimal] = None
+    # total_transactions: Optional[Decimal] = None
+    # total_paid: Optional[Decimal] = None
+    # current_balance: Optional[Decimal] = None
 
     class Config:
         from_attributes = True

@@ -7,15 +7,14 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 
 class ItemType(str, enum.Enum):
-    final_product= "final_product"
-    raw_material= "raw_material"
+    FINAL_PRODUCT= "FINAL_PRODUCT"
+    RAW_MATERIAL= "RAW_MATERIAL"
 
 class UnitType(str, enum.Enum):
     PCS = "PCS"
     SET = "SET"
 
-@staticmethod
-def generate_custom_id(prefix: str, length: int=8)-> str:
+def generate_custom_id(prefix: str, length: int=5)-> str:
     random_part = ''.join(secrets.choice(string.ascii_uppercase) for _ in range(length))
     return f"{prefix}-{random_part}"
 
@@ -39,14 +38,16 @@ class Item(Base):
     type = Column(Enum(ItemType), nullable=False)
     unit_type = Column(Enum(UnitType), nullable=False)
 
-    avg_price = Column(Numeric(15,2), default=0)
+    avg_price = Column(Numeric(15,2), default=0.00)
     total_quantity = Column(Integer, default=0)
 
-    category_id = Column(String(20), ForeignKey("categories.id"), nullable=False)
+    category_id = Column(String(10), ForeignKey("categories.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now()) 
 
     category = relationship("Category", back_populates="items")
-    stock_records = relationship("Stock", back_populates="item")
-    sale_records = relationship("Sale", back_populates="item")
+    stock_entries = relationship("Stock", back_populates="item") 
+
+  
+
 

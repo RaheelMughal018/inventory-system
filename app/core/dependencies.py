@@ -1,13 +1,11 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.core.security import decode_access_token
 
-# OAuth2 scheme for token extraction
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/token")
 
 
 def get_db():
@@ -19,33 +17,43 @@ def get_db():
         db.close()
 
 
+# Use HTTPBearer so Swagger automatically asks for a token
+bearer_scheme = HTTPBearer(auto_error=True)
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Dependency to get the current authenticated user.
-    Raises HTTPException if token is invalid or user not found.
+    Get the currently authenticated user from the JWT token.
+    Raises 401 if token is invalid or user does not exist.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
+    token = credentials.credentials
     payload = decode_access_token(token)
-    if payload is None:
-        raise credentials_exception
-    
-    user_id: str = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    
-    # Try to get user by email (assuming sub contains email)
-    user = db.query(User).filter(User.email == user_id).first()
-    if user is None:
-        raise credentials_exception
-    
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_email = payload.get("sub")
+    if not user_email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token payload missing subject",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 
