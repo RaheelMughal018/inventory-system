@@ -10,6 +10,7 @@ from app.logger_config import logger
 
 # ==================== QUERY OPERATIONS ====================
 
+
 def get_account_by_id(db: Session, account_id: str) -> Optional[PaymentAccount]:
     """Get payment account by ID."""
     try:
@@ -24,17 +25,18 @@ def get_account_by_name(db: Session, name: str) -> Optional[PaymentAccount]:
     try:
         return db.query(PaymentAccount).filter(PaymentAccount.name == name).first()
     except Exception as e:
-        logger.error(f"Error fetching payment account by name {name}: {str(e)}")
+        logger.error(
+            f"Error fetching payment account by name {name}: {str(e)}")
         return None
 
 
 def get_all_accounts(
-    db:Session, 
+    db: Session,
     skip: int = 0,
     limit: int = 20,
     search: Optional[str] = None,
     type: Optional[PaymentAccountType] = None
-    ) -> tuple[List[PaymentAccount], int]:
+) -> tuple[List[PaymentAccount], int]:
     """ Get all Accounts with optional filteration """
     query = db.query(PaymentAccount)
 
@@ -48,11 +50,12 @@ def get_all_accounts(
                 PaymentAccount.name.ilike(search_term),
                 PaymentAccount.id.ilike(search_term)
             )
-        ) 
-    
+        )
+
     count = query.count()
     accounts = query.offset(skip).limit(limit).all()
     return accounts, count
+
 
 def create_account(
     db: Session,
@@ -61,8 +64,8 @@ def create_account(
 ) -> PaymentAccount:
     """Create a new payment account."""
 
-    if get_account_by_name(db, name):
-        raise ValueError("Payment account with this name already exists")
+    # if get_account_by_name(db, name):
+    #     raise ValueError("Payment account with this name already exists")
 
     account_id = generate_custom_id("ACC")
 
