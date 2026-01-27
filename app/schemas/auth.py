@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from app.models.user import UserRole
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -21,10 +22,19 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: dict  # User information
 
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=4)
     name: str = Field(min_length=1, max_length=255)
+
+
+class RegisterResponse(BaseModel):
+    id: int
+    user_id: str
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=255)
+
 
 class Logout(BaseModel):
     message: str = True
