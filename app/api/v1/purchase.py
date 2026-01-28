@@ -254,7 +254,7 @@ async def list_purchase_invoices(
 
 
 @router.get(
-    "/{invoice_id}",
+    "/invoices/{invoice_id}",
     response_model=PurchaseInvoiceResponse,
     summary="Get purchase invoice details",
     description="Get detailed information about a specific purchase invoice including all items and payments.",
@@ -263,7 +263,7 @@ async def list_purchase_invoices(
         404: {"model": ErrorResponse, "description": "Purchase invoice not found"}
     }
 )
-async def get_purchase_invoice(
+def get_purchase_invoice(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
     db: Session = Depends(get_db)
 ):
@@ -299,7 +299,7 @@ async def get_purchase_invoice(
 # ============================================================================
 
 @router.post(
-    "/{invoice_id}/payments",
+    "/invoices/{invoice_id}/payments",
     response_model=PaymentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add payment to purchase invoice",
@@ -321,7 +321,7 @@ async def get_purchase_invoice(
         404: {"model": ErrorResponse, "description": "Invoice or payment account not found"}
     }
 )
-async def add_payment_to_invoice(
+def add_payment_to_invoice(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
     payment_data: PaymentCreate = ...,
     db: Session = Depends(get_db),
@@ -378,12 +378,12 @@ async def add_payment_to_invoice(
 
 
 @router.get(
-    "/{invoice_id}/payments",
+    "/invoices/{invoice_id}/payments",
     response_model=List[PaymentResponse],
     summary="Get all payments for an invoice",
     description="Get all payments made for a specific purchase invoice."
 )
-async def get_invoice_payments(
+def get_invoice_payments(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
     db: Session = Depends(get_db)
 ):
@@ -451,7 +451,7 @@ async def get_invoice_payments(
         404: {"model": ErrorResponse, "description": "Payment not found"}
     }
 )
-async def delete_payment(
+def delete_payment(
     payment_id: str = Path(..., description="Payment ID to delete"),
     db: Session = Depends(get_db)
 ):
@@ -501,7 +501,7 @@ async def delete_payment(
     summary="Get all purchases from a supplier",
     description="Get all purchase invoices from a specific supplier with optional status filter."
 )
-async def get_supplier_invoices(
+def get_supplier_invoices(
     supplier_id: int = Path(..., gt=0, description="Supplier ID"),
     payment_status: Optional[InvoiceStatusEnum] = Query(default=None, description="Filter by payment status"),
     skip: int = Query(default=0, ge=0, description="Number of records to skip"),
@@ -553,7 +553,7 @@ async def get_supplier_invoices(
     - balance: Debit - Credit (positive = you owe them, negative = they owe you)
     """
 )
-async def get_supplier_balance(
+def get_supplier_balance(
     supplier_id: int = Path(..., gt=0, description="Supplier ID"),
     db: Session = Depends(get_db)
 ):
@@ -601,7 +601,7 @@ async def get_supplier_balance(
     - Invoice counts by status (unpaid, partial, paid)
     """
 )
-async def get_supplier_summary(
+def get_supplier_summary(
     supplier_id: int = Path(..., gt=0, description="Supplier ID"),
     db: Session = Depends(get_db)
 ):
@@ -650,7 +650,7 @@ async def get_supplier_summary(
     - Unit type (PCS, SET, etc.)
     """
 )
-async def get_item_stock(
+def get_item_stock(
     item_id: str = Path(..., description="Item ID"),
     db: Session = Depends(get_db)
 ):
@@ -685,7 +685,7 @@ async def get_item_stock(
     summary="Get item stock history",
     description="Get stock movement history for an item (purchases, sales, adjustments)."
 )
-async def get_item_history(
+def get_item_history(
     item_id: str = Path(..., description="Item ID"),
     limit: int = Query(default=50, ge=1, le=500, description="Number of records to return"),
     db: Session = Depends(get_db)
@@ -737,7 +737,7 @@ async def get_item_history(
     - `ref_type`: Filter by reference type (PURCHASE, SALE, ADJUSTMENT)
     """
 )
-async def get_stock_ledger(
+def get_stock_ledger(
     skip: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=100, ge=1, le=1000, description="Number of records to return"),
     item_id: Optional[str] = Query(default=None, description="Filter by item ID"),
@@ -754,7 +754,6 @@ async def get_stock_ledger(
             limit=limit,
             ref_type=ref_type
         )
-        
         # If item_id filter is provided, filter further
         if item_id:
             stock_entries = [e for e in stock_entries if e.item_id == item_id]
