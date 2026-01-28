@@ -82,7 +82,6 @@ def login(
     Login endpoint - Authenticate user and return JWT token.
     """
     try:
-        print("Here==============")
         logger.info(f"Login attempt for email: {login_data.email}")
 
         # Authenticate user

@@ -143,17 +143,18 @@ def update_item(
 
 
 def delete_item(db: Session, item_id: str) -> bool:
-    """Delete an item."""
     item = get_item_by_id(db, item_id)
+
     if not item:
         return False
-    
-    # Check if item has stock entries
-    if item.stock_entry:
-        raise ValueError("Cannot delete item that has stock entries. Please remove stock entries first.")
-    
-    db.delete(item)
+
+    if len(item.stock_entries) > 0:
+        raise ValueError(
+            "Cannot delete item that has stock entries. Please remove stock entries first."
+        )
+
     try:
+        db.delete(item)
         db.commit()
         return True
     except Exception as e:
