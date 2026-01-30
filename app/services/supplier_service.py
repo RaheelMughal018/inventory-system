@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from typing import Optional, List
+from app.models.stock import PurchaseInvoice
 from app.models.user import User, UserRole, UserProfile
 from app.core.security import get_password_hash
 from app.logger_config import logger
@@ -156,8 +157,14 @@ def update_supplier(
 def delete_supplier(db: Session, supplier_id: int) -> bool:
     """Delete a supplier."""
     user = get_supplier_by_id(db, supplier_id)
+    print("================",user)
     if not user:
         return False
+
+    has_invoice = db.query(PurchaseInvoice).filter(PurchaseInvoice.supplier_id == supplier_id).first()
+    if has_invoice:
+        logger.warning(f"Cannot delete supplier {user.name} because they have purchases invoices")
+        raise ValueError("Can't delete the supplier because they have purchase invoices")
     
     db.delete(user)
     try:

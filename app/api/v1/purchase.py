@@ -588,8 +588,8 @@ def get_supplier_balance(
 
 
 @router.get(
-    "/suppliers/{supplier_id}/summary",
-    response_model=SupplierPurchaseSummary,
+    "/suppliers/summary",
+    response_model=List[SupplierPurchaseSummary],
     summary="Get supplier purchase summary",
     description="""
     Get comprehensive purchase summary for a supplier.
@@ -601,23 +601,22 @@ def get_supplier_balance(
     - Invoice counts by status (unpaid, partial, paid)
     """
 )
-def get_supplier_summary(
-    supplier_id: int = Path(..., gt=0, description="Supplier ID"),
+def get_all_suppliers_summary(
     db: Session = Depends(get_db)
 ):
     """Get comprehensive purchase summary for a supplier."""
     try:
-        logger.info(f"API: Generating summary for supplier {supplier_id}")
+        logger.info(f"API: Generating summary for suppliers")
         
         service = PurchaseService(db)
-        summary = service.get_supplier_purchase_summary(supplier_id)
+        summaries = service.get_all_suppliers_purchase_summary()
         
-        logger.info(f"API: Summary generated for supplier {supplier_id}")
+        logger.info(f"API: Summary generated for suppliers")
         
-        return SupplierPurchaseSummary(**summary)
+        return summaries
         
     except ValueError as e:
-        logger.error(f"API: Error generating supplier summary: {str(e)}")
+        logger.error(f"API: Error generating suppliers summary: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
@@ -626,7 +625,7 @@ def get_supplier_summary(
         logger.error(f"API: Unexpected error generating summary: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate supplier summary: {str(e)}"
+            detail=f"Failed to generate suppliers summary: {str(e)}"
         )
 
 

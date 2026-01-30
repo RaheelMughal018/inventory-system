@@ -797,74 +797,77 @@ class PurchaseService:
                 'balance': Decimal('0.00')
             }
 
-    def get_supplier_purchase_summary(self, supplier_id: int) -> Dict[str, Any]:
-        """Get comprehensive purchase summary for a supplier."""
+
+    def get_all_suppliers_purchase_summary(self) -> List[Dict[str, Any]]:
+        """Get comprehensive purchase summary for all suppliers."""
         try:
-            logger.info(f"Generating purchase summary for supplier: {supplier_id}")
+            logger.info("Generating purchase summary for all suppliers")
             
-            # Get supplier info
-            supplier = self.db.query(User).filter(User.id == supplier_id).first()
-            if not supplier:
-                logger.warning(f"Supplier not found: {supplier_id}")
-                raise ValueError("Supplier not found")
+            # Get all suppliers
+            suppliers = self.db.query(User).filter(User.role == UserRole.supplier).all()
+            if not suppliers:
+                logger.warning("No suppliers found")
+                return []
             
-            # Total purchases
-            total_purchases = self.db.query(func.sum(PurchaseInvoice.total_amount)).filter(
-                PurchaseInvoice.supplier_id == supplier_id
-            ).scalar() or Decimal("0.00")
+            summaries = []
+
+            for supplier in suppliers:
+                supplier_id = supplier.id
+                
+                # Total purchases
+                total_purchases = self.db.query(func.sum(PurchaseInvoice.total_amount))\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id)\
+                    .scalar() or Decimal("0.00")
+                
+                # Total paid
+                total_paid = self.db.query(func.sum(PurchaseInvoice.paid_amount))\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id)\
+                    .scalar() or Decimal("0.00")
+                
+                # Outstanding balance from ledger
+                balance_info = self.get_supplier_balance(supplier_id)
+                outstanding = balance_info.get('balance', Decimal("0.00"))
+                
+                # Count of invoices by status
+                total_invoices = self.db.query(PurchaseInvoice)\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id)\
+                    .count()
+                
+                unpaid_count = self.db.query(PurchaseInvoice)\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id,
+                            PurchaseInvoice.payment_status == InvoiceStatus.UNPAID)\
+                    .count()
+                
+                partial_count = self.db.query(PurchaseInvoice)\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id,
+                            PurchaseInvoice.payment_status == InvoiceStatus.PARTIAL)\
+                    .count()
+                
+                paid_count = self.db.query(PurchaseInvoice)\
+                    .filter(PurchaseInvoice.supplier_id == supplier_id,
+                            PurchaseInvoice.payment_status == InvoiceStatus.PAID)\
+                    .count()
+                
+                summaries.append({
+                    "supplier_id": supplier_id,
+                    "supplier_name": supplier.name,
+                    "supplier_user_id": supplier.user_id,
+                    "total_purchases": float(total_purchases),
+                    "total_paid": float(total_paid),
+                    "outstanding_balance": float(outstanding),
+                    "total_invoices": total_invoices,
+                    "unpaid_invoices": unpaid_count,
+                    "partial_invoices": partial_count,
+                    "paid_invoices": paid_count
+                })
             
-            # Total paid
-            total_paid = self.db.query(func.sum(PurchaseInvoice.paid_amount)).filter(
-                PurchaseInvoice.supplier_id == supplier_id
-            ).scalar() or Decimal("0.00")
-            
-            # Outstanding balance from ledger
-            balance_info = self.get_supplier_balance(supplier_id)
-            outstanding = balance_info['balance']
-            
-            # Count of invoices by status
-            total_invoices = self.db.query(PurchaseInvoice).filter(
-                PurchaseInvoice.supplier_id == supplier_id
-            ).count()
-            
-            unpaid_count = self.db.query(PurchaseInvoice).filter(
-                PurchaseInvoice.supplier_id == supplier_id,
-                PurchaseInvoice.payment_status == InvoiceStatus.UNPAID
-            ).count()
-            
-            partial_count = self.db.query(PurchaseInvoice).filter(
-                PurchaseInvoice.supplier_id == supplier_id,
-                PurchaseInvoice.payment_status == InvoiceStatus.PARTIAL
-            ).count()
-            
-            paid_count = self.db.query(PurchaseInvoice).filter(
-                PurchaseInvoice.supplier_id == supplier_id,
-                PurchaseInvoice.payment_status == InvoiceStatus.PAID
-            ).count()
-            
-            summary = {
-                "supplier_id": supplier_id,
-                "supplier_name": supplier.name,
-                "supplier_user_id": supplier.user_id,
-                "total_purchases": float(total_purchases),
-                "total_paid": float(total_paid),
-                "outstanding_balance": float(outstanding),
-                "total_invoices": total_invoices,
-                "unpaid_invoices": unpaid_count,
-                "partial_invoices": partial_count,
-                "paid_invoices": paid_count
-            }
-            
-            logger.info(
-                f"Purchase summary generated for {supplier.name}: "
-                f"Purchases={total_purchases}, Paid={total_paid}, Outstanding={outstanding}"
-            )
-            
-            return summary
-            
+            logger.info(f"Generated purchase summaries for {len(suppliers)} suppliers")
+            return summaries
+
         except Exception as e:
-            logger.error(f"Error generating supplier summary for {supplier_id}: {str(e)}")
+            logger.error(f"Error generating supplier summaries: {str(e)}")
             raise
+ 
 
     # ==================== STOCK QUERIES ====================
 
