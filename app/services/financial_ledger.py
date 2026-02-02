@@ -71,6 +71,7 @@ class FinancialLedgerService:
                 .offset(skip)
                 .limit(limit)
                 .all()
+                
             )
 
             return rows, total_count, totals
