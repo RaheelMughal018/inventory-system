@@ -105,6 +105,27 @@ class PurchaseInvoiceCreate(BaseModel):
             }
         }
 
+class PurchaseInvoiceUpdate(BaseModel):
+    """Schema for updating an existing purchase invoice"""
+    items: List[PurchaseItemCreate] = Field(
+        ..., 
+        min_length=1, 
+        description="Updated list of items (replaces all existing items)"
+    )
+    
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "items": [
+                    {"item_id": "ITM-ABC123", "quantity": 15, "unit_price": 2.00},
+                    {"item_id": "ITM-XYZ789", "quantity": 10, "unit_price": 3.50}
+                ],
+                "notes": "Updated quantities for monthly inventory"
+            }
+        }
+
+
 
 # ============================================================================
 # Request Schemas - Payment

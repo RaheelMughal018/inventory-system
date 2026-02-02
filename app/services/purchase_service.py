@@ -229,6 +229,365 @@ class PurchaseService:
             logger.error(f"Unexpected error in purchase invoice creation: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to create purchase invoice: {str(e)}")
 
+    # ==================== UPDATE INVOICE ====================
+
+    def update_purchase_invoice(
+        self,
+        invoice_id: str,
+        items: Optional[List[Dict[str, Any]]] = None,
+        performed_by_id: Optional[int] = None
+    ) -> PurchaseInvoice:
+        """
+        Update an existing purchase invoice.
+        
+        This will:
+        1. Validate invoice exists and can be updated (cannot update fully paid invoices)
+        2. Reverse all existing stock and ledger entries
+        3. Delete existing purchase items
+        4. Create new purchase items with new data
+        5. Update stock with new quantities and recalculate average prices
+        6. Update financial ledger entries
+        7. Preserve existing payments
+        
+        Args:
+            invoice_id: ID of the invoice to update
+            items: New list of items (if None, keeps existing items)
+            performed_by_id: ID of user performing the update
+            
+        Returns:
+            Updated PurchaseInvoice
+            
+        Raises:
+            ValueError: If invoice not found, fully paid, or has issues
+        """
+        logger.info(f"Starting invoice update - Invoice: {invoice_id}, By: {performed_by_id}")
+        
+        try:
+            # 1. Get existing invoice
+            invoice = self.get_purchase_invoice(invoice_id)
+            if not invoice:
+                logger.error(f"Invoice not found: {invoice_id}")
+                raise ValueError(f"Purchase invoice {invoice_id} not found")
+            
+            # 2. Validate invoice can be updated
+            # Note: We allow updating UNPAID and PARTIAL invoices
+            # For PAID invoices, user should delete payments first
+            if invoice.payment_status == InvoiceStatus.PAID:
+                logger.error(f"Cannot update fully paid invoice: {invoice_id}")
+                raise ValueError(
+                    "Cannot update fully paid invoice. "
+                    "Please delete payments first if you need to modify this invoice."
+                )
+            
+            logger.info(
+                f"Invoice validated for update: {invoice_id} - "
+                f"Current status: {invoice.payment_status}, "
+                f"Paid amount: {invoice.paid_amount}"
+            )
+            
+            # 3. If no items provided, nothing to update
+            if items is None:
+                logger.warning(f"No items provided for update: {invoice_id}")
+                return invoice
+            
+            # 4. Validate new items
+            validated_items, new_total_amount = self._validate_and_calculate_items(items)
+            logger.info(f"New items validated. Total items: {len(validated_items)}, New total: {new_total_amount}")
+            
+            # 5. Check if new total is less than already paid amount
+            if new_total_amount < invoice.paid_amount:
+                logger.error(
+                    f"New total ({new_total_amount}) is less than paid amount ({invoice.paid_amount})"
+                )
+                raise ValueError(
+                    f"New total amount ({new_total_amount}) cannot be less than "
+                    f"already paid amount ({invoice.paid_amount}). "
+                    "Please delete some payments first."
+                )
+            
+            # 6. Reverse existing items (stock and purchase items)
+            logger.info(f"Reversing existing items for invoice {invoice_id}")
+            self._reverse_invoice_items(invoice)
+            
+            # 7. Update financial ledger for the difference
+            old_total = invoice.total_amount
+            difference = new_total_amount - old_total
+            
+            if difference != 0:
+                logger.info(f"Updating financial ledger - Difference: {difference}")
+                self._update_purchase_ledger(invoice.supplier_id, invoice_id, difference)
+            
+            # 8. Create new purchase items and update stock
+            logger.info(f"Creating new items for invoice {invoice_id}")
+            for item_data in validated_items:
+                self._create_purchase_item_and_update_stock(invoice, item_data)
+            
+            # 9. Update invoice totals
+            invoice.total_amount = new_total_amount
+            invoice.balance_due = new_total_amount - invoice.paid_amount
+            
+            # 10. Update payment status
+            invoice.payment_status = self._determine_payment_status(
+                invoice.total_amount,
+                invoice.paid_amount
+            )
+            
+            # Commit transaction
+            self.db.commit()
+            self.db.refresh(invoice)
+            
+            logger.info(
+                f"✅ Invoice updated successfully: {invoice_id} - "
+                f"Old total: {old_total} → New total: {new_total_amount} - "
+                f"Status: {invoice.payment_status} - "
+                f"Updated by: {performed_by_id}"
+            )
+            
+            return invoice
+            
+        except ValueError as ve:
+            self.db.rollback()
+            logger.error(f"Validation error in invoice update: {str(ve)}")
+            raise
+            
+        except IntegrityError as ie:
+            self.db.rollback()
+            logger.error(f"Database integrity error in invoice update: {str(ie)}")
+            raise ValueError("Failed to update invoice due to database constraint.")
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Unexpected error in invoice update: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to update invoice: {str(e)}")
+
+    def _reverse_invoice_items(self, invoice: PurchaseInvoice):
+        """
+        Reverse all items in an invoice by:
+        1. Reversing stock quantities and recalculating average prices
+        2. Deleting stock ledger entries
+        3. Deleting purchase item entries
+        """
+        logger.info(f"Reversing items for invoice {invoice.id}")
+        
+        for purchase_item in invoice.items:
+            item = purchase_item.item
+            quantity = purchase_item.quantity
+            unit_price = purchase_item.unit_price
+            
+            # Store values before reversal
+            qty_before = item.total_quantity
+            avg_price_before = item.avg_price
+            
+            logger.debug(
+                f"Reversing item: {item.id} - "
+                f"Qty: {quantity}, Price: {unit_price}"
+            )
+            
+            # Calculate new average price after removing this purchase
+            # We need to reverse the weighted average calculation
+            if qty_before == quantity:
+                # This was the only purchase, reset to 0
+                new_avg_price = Decimal('0.00')
+                new_quantity = 0
+            elif qty_before > quantity:
+                # Remove this purchase from the average
+                # Formula: new_avg = (total_value - removed_value) / (total_qty - removed_qty)
+                total_value = avg_price_before * qty_before
+                removed_value = unit_price * quantity
+                new_total_value = total_value - removed_value
+                new_quantity = qty_before - quantity
+                
+                if new_quantity > 0:
+                    new_avg_price = new_total_value / new_quantity
+                else:
+                    new_avg_price = Decimal('0.00')
+                    new_quantity = 0
+            else:
+                # This shouldn't happen (trying to remove more than we have)
+                logger.warning(
+                    f"Attempting to remove {quantity} items but only {qty_before} exist for {item.id}"
+                )
+                new_avg_price = avg_price_before
+                new_quantity = max(0, qty_before - quantity)
+            
+            # Update item
+            item.total_quantity = new_quantity
+            item.avg_price = new_avg_price
+            self.db.add(item)
+            
+            logger.info(
+                f"Stock reversed - Item: {item.name} ({item.id}), "
+                f"Qty: {qty_before} → {new_quantity}, "
+                f"Avg Price: {avg_price_before} → {new_avg_price}"
+            )
+            
+            # Delete stock ledger entry for this item in this invoice
+            stock_entries = self.db.query(Stock).filter(
+                Stock.item_id == item.id,
+                Stock.ref_type == "PURCHASE",
+                Stock.ref_id == invoice.id
+            ).all()
+            
+            for stock_entry in stock_entries:
+                self.db.delete(stock_entry)
+                logger.debug(f"Stock ledger entry deleted: {stock_entry.id}")
+            
+            # Delete purchase item
+            self.db.delete(purchase_item)
+            logger.debug(f"Purchase item deleted: {purchase_item.id}")
+
+    def _update_purchase_ledger(
+        self,
+        supplier_id: int,
+        invoice_id: str,
+        difference: Decimal
+    ):
+        """
+        Update financial ledger when invoice total changes.
+        
+        If difference is positive: Additional debit (you owe more)
+        If difference is negative: Additional credit (you owe less)
+        """
+        if difference == 0:
+            return
+        
+        supplier_balance_before = get_user_balance(self.db, supplier_id)
+        
+        if difference > 0:
+            # Invoice total increased - you owe more
+            ledger_entry = FinancialLedger(
+                user_id=supplier_id,
+                ref_type="PURCHASE_UPDATE",
+                ref_id=invoice_id,
+                debit=difference,
+                credit=Decimal('0.00')
+            )
+            supplier_balance_after = supplier_balance_before + difference
+        else:
+            # Invoice total decreased - you owe less
+            ledger_entry = FinancialLedger(
+                user_id=supplier_id,
+                ref_type="PURCHASE_UPDATE",
+                ref_id=invoice_id,
+                debit=Decimal('0.00'),
+                credit=abs(difference)
+            )
+            supplier_balance_after = supplier_balance_before + difference  # difference is negative
+        
+        self.db.add(ledger_entry)
+        
+        logger.info(
+            f"Financial ledger updated - Supplier ID: {supplier_id}, "
+            f"Difference: {difference}, "
+            f"Balance: {supplier_balance_before} → {supplier_balance_after}"
+        )
+
+    # ==================== DELETE INVOICE ====================
+
+    def delete_purchase_invoice(
+        self,
+        invoice_id: str,
+        performed_by_id: Optional[int] = None
+    ) -> bool:
+        """
+        Delete a purchase invoice and reverse all related entries.
+        
+        This will:
+        1. Validate invoice exists and can be deleted
+        2. Delete all payments (if any) and reverse their ledger entries
+        3. Reverse all stock entries (reduce quantities, recalculate avg prices)
+        4. Delete all stock ledger entries
+        5. Delete all purchase items
+        6. Delete financial ledger entries for the purchase
+        7. Delete the invoice itself
+        
+        Args:
+            invoice_id: ID of the invoice to delete
+            performed_by_id: ID of user performing the deletion
+            
+        Returns:
+            True if deleted successfully
+            
+        Raises:
+            ValueError: If invoice not found or cannot be deleted
+            
+        Note:
+            This is a destructive operation and cannot be undone.
+            Use with caution!
+        """
+        logger.info(f"Starting invoice deletion - Invoice: {invoice_id}, By: {performed_by_id}")
+        
+        try:
+            # 1. Get invoice
+            invoice = self.get_purchase_invoice(invoice_id)
+            if not invoice:
+                logger.error(f"Invoice not found: {invoice_id}")
+                raise ValueError(f"Purchase invoice {invoice_id} not found")
+            
+            logger.info(
+                f"Invoice found for deletion: {invoice_id} - "
+                f"Supplier: {invoice.supplier.name} - "
+                f"Total: {invoice.total_amount} - "
+                f"Status: {invoice.payment_status}"
+            )
+            
+            # 2. Delete all payments first
+            if invoice.payments:
+                logger.info(f"Deleting {len(invoice.payments)} payments for invoice {invoice_id}")
+                
+                # Get payment IDs before deletion
+                payment_ids = [p.id for p in invoice.payments]
+                
+                for payment_id in payment_ids:
+                    # This will also delete financial ledger entries
+                    self.delete_payment(payment_id)
+                    logger.debug(f"Payment deleted during invoice deletion: {payment_id}")
+            
+            # 3. Reverse all items (stock and purchase items)
+            logger.info(f"Reversing all items for invoice {invoice_id}")
+            self._reverse_invoice_items(invoice)
+            
+            # 4. Delete financial ledger entries for this purchase
+            ledger_entries = self.db.query(FinancialLedger).filter(
+                or_(
+                    FinancialLedger.ref_id == invoice_id,
+                    FinancialLedger.ref_id.like(f"%{invoice_id}%")  # Also catch UPDATE entries
+                )
+            ).all()
+            
+            for ledger_entry in ledger_entries:
+                self.db.delete(ledger_entry)
+                logger.debug(
+                    f"Financial ledger entry deleted: "
+                    f"Type={ledger_entry.ref_type}, ID={ledger_entry.ref_id}"
+                )
+            
+            # 5. Delete the invoice
+            supplier_name = invoice.supplier.name
+            supplier_id = invoice.supplier_id
+            total_amount = invoice.total_amount
+            
+            self.db.delete(invoice)
+            self.db.commit()
+            
+            logger.info(
+                f"✅ Invoice deleted successfully: {invoice_id} - "
+                f"Supplier: {supplier_name} (ID: {supplier_id}) - "
+                f"Amount: {total_amount} - "
+                f"Deleted by: {performed_by_id}"
+            )
+            
+            return True
+            
+        except ValueError as ve:
+            self.db.rollback()
+            logger.error(f"Validation error in invoice deletion: {str(ve)}")
+            raise
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Unexpected error in invoice deletion: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to delete invoice: {str(e)}")
     def _validate_supplier(self, supplier_id: int) -> User:
         """Validate that supplier exists and has correct role."""
         supplier = self.db.query(User).filter(
@@ -694,7 +1053,9 @@ class PurchaseService:
         limit: int = 100,
         supplier_id: Optional[int] = None,
         payment_status: Optional[InvoiceStatus] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
     ) -> tuple[List[PurchaseInvoice], int]:
         """Get all purchase invoices with optional filtering."""
         try:
@@ -717,6 +1078,16 @@ class PurchaseService:
                 search_term = f"%{search}%"
                 query = query.filter(PurchaseInvoice.id.ilike(search_term))
                 logger.debug(f"Searching with term: {search}")
+
+             # Date range filtering
+            if start_date:
+                query = query.filter(cast(PurchaseInvoice.created_at, Date) >= start_date)
+                logger.debug(f"Filtering by start_date: {start_date}")
+            
+            if end_date:
+                query = query.filter(cast(PurchaseInvoice.created_at, Date) <= end_date)
+                logger.debug(f"Filtering by end_date: {end_date}")
+            
             
             total = query.count()
             invoices = query.order_by(PurchaseInvoice.created_at.desc()).offset(skip).limit(limit).all()
@@ -967,3 +1338,6 @@ class PurchaseService:
         except Exception as e:
             logger.error(f"Error fetching stock movements: {str(e)}")
             return [], 0
+
+
+ 

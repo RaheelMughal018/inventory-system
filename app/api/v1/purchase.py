@@ -8,9 +8,10 @@ from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from sqlalchemy.orm import Session
-
-from app.core.dependencies import get_db
+from app.models.user import User
+from app.core.dependencies import get_db,get_current_active_user
 from app.services.purchase_service import PurchaseService
+from datetime import datetime
 from app.schemas.purchase import (
     # Request schemas
     PurchaseInvoiceCreate,
@@ -22,6 +23,7 @@ from app.schemas.purchase import (
     PurchaseInvoiceResponse,
     PurchaseInvoiceSummary,
     PurchaseInvoiceListResponse,
+    PurchaseInvoiceUpdate,
     PaymentResponse,
     ItemStockSummary,
     SupplierBalance,
@@ -105,6 +107,7 @@ def build_invoice_summary(invoice) -> PurchaseInvoiceSummary:
     )
 
 
+
 # ============================================================================
 # Purchase Invoice Endpoints
 # ============================================================================
@@ -142,6 +145,7 @@ def build_invoice_summary(invoice) -> PurchaseInvoiceSummary:
 def create_purchase_invoice(
     purchase_data: PurchaseInvoiceCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
     # In production, get this from authenticated user
     performed_by_id: Optional[int] = Query(default=1, description="ID of user creating this purchase")
 ):
@@ -217,7 +221,18 @@ async def list_purchase_invoices(
     supplier_id: Optional[int] = Query(default=None, description="Filter by supplier ID"),
     payment_status: Optional[InvoiceStatusEnum] = Query(default=None, description="Filter by payment status"),
     search: Optional[str] = Query(default=None, max_length=100, description="Search in invoice IDs"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    start_date: Optional[datetime] = Query(
+        default=None, 
+        description="Filter invoices created on or after this date (ISO 8601: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)",
+        example="2024-01-01T00:00:00"
+    ),
+    end_date: Optional[datetime] = Query(
+        default=None, 
+        description="Filter invoices created on or before this date (ISO 8601: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)",
+        example="2024-12-31T23:59:59"
+    ),
 ):
     """Get a list of purchase invoices with filtering and pagination."""
     try:
@@ -230,7 +245,9 @@ async def list_purchase_invoices(
             limit=limit,
             supplier_id=supplier_id,
             payment_status=payment_status,
-            search=search
+            search=search,
+            start_date=start_date,
+            end_date=end_date
         )
         
         # Build summary responses
@@ -265,7 +282,8 @@ async def list_purchase_invoices(
 )
 def get_purchase_invoice(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get detailed information about a specific purchase invoice."""
     try:
@@ -292,6 +310,178 @@ def get_purchase_invoice(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve purchase invoice: {str(e)}"
         )
+
+@router.put(
+    "/{invoice_id}",
+    response_model=PurchaseInvoiceResponse,
+    summary="Update purchase invoice",
+    description="""
+    Update an existing purchase invoice by replacing all items.
+    
+    **Important Notes:**
+    - Cannot update fully PAID invoices (delete payments first)
+    - Can update UNPAID and PARTIAL invoices
+    - All existing items are removed and replaced with new items
+    - Stock quantities and average prices are recalculated
+    - Financial ledger is updated with the difference
+    - Existing payments are preserved
+    - New total cannot be less than already paid amount
+    
+    **Process:**
+    1. Validates invoice exists and can be updated
+    2. Reverses all existing stock entries
+    3. Deletes old purchase items
+    4. Creates new purchase items
+    5. Updates stock with new quantities and recalculates avg prices
+    6. Updates financial ledger entries
+    7. Preserves existing payments
+    """,
+    responses={
+        200: {"description": "Invoice updated successfully"},
+        400: {"model": ErrorResponse, "description": "Validation error or cannot update"},
+        404: {"model": ErrorResponse, "description": "Invoice not found"}
+    }
+)
+async def update_purchase_invoice(
+    invoice_id: str = Path(..., description="Purchase invoice ID to update"),
+    update_data: PurchaseInvoiceUpdate = ...,
+    db: Session = Depends(get_db),
+    performed_by_id: Optional[int] = Query(default=1, description="ID of user updating invoice"),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Update an existing purchase invoice.
+    
+    **Example Request:**
+    ```json
+    {
+        "items": [
+            {"item_id": "ITM-ABC123", "quantity": 15, "unit_price": 2.00},
+            {"item_id": "ITM-XYZ789", "quantity": 10, "unit_price": 3.50}
+        ],
+        "notes": "Updated quantities"
+    }
+    ```
+    
+    **Restrictions:**
+    - Cannot update PAID invoices (delete payments first)
+    - New total must be >= already paid amount
+    """
+    try:
+        logger.info(f"API: Updating purchase invoice: {invoice_id}")
+        
+        service = PurchaseService(db)
+        
+        # Convert Pydantic model to dict for service
+        items = [item.model_dump() for item in update_data.items]
+        
+        invoice = service.update_purchase_invoice(
+            invoice_id=invoice_id,
+            items=items,
+            performed_by_id=performed_by_id
+        )
+        
+        logger.info(f"API: Purchase invoice updated successfully: {invoice_id}")
+        
+        return build_purchase_invoice_response(invoice)
+        
+    except ValueError as e:
+        logger.error(f"API: Validation error updating invoice: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"API: Unexpected error updating invoice: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update purchase invoice: {str(e)}"
+        )
+
+
+@router.delete(
+    "/{invoice_id}",
+    response_model=SuccessResponse,
+    summary="Delete purchase invoice",
+    description="""
+    Delete a purchase invoice and reverse all related entries.
+    
+    **⚠️ WARNING: This is a destructive operation and cannot be undone!**
+    
+    This will:
+    1. Delete all payments and reverse their ledger entries
+    2. Reverse all stock entries (reduce quantities, recalculate avg prices)
+    3. Delete all stock ledger entries
+    4. Delete all purchase items
+    5. Delete financial ledger entries
+    6. Delete the invoice itself
+    
+    **Use Cases:**
+    - Correcting errors in invoice creation
+    - Removing duplicate invoices
+    - Canceling purchases before delivery
+    
+    **Best Practice:**
+    - Consider updating the invoice instead if possible
+    - Ensure you have backups if needed
+    - Document why the invoice is being deleted
+    """,
+    responses={
+        200: {"description": "Invoice deleted successfully"},
+        404: {"model": ErrorResponse, "description": "Invoice not found"},
+        400: {"model": ErrorResponse, "description": "Cannot delete invoice"}
+    }
+)
+async def delete_purchase_invoice(
+    invoice_id: str = Path(..., description="Purchase invoice ID to delete"),
+    db: Session = Depends(get_db),
+    performed_by_id: Optional[int] = Query(default=1, description="ID of user deleting invoice"),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Delete a purchase invoice and reverse all related entries.
+    
+    **⚠️ This action cannot be undone!**
+    """
+    try:
+        logger.info(f"API: Deleting purchase invoice: {invoice_id}")
+        
+        service = PurchaseService(db)
+        success = service.delete_purchase_invoice(
+            invoice_id=invoice_id,
+            performed_by_id=performed_by_id
+        )
+        
+        if not success:
+            logger.warning(f"API: Failed to delete invoice: {invoice_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to delete purchase invoice {invoice_id}"
+            )
+        
+        logger.info(f"API: Purchase invoice deleted successfully: {invoice_id}")
+        
+        return SuccessResponse(
+            message="Purchase invoice deleted successfully",
+            data={
+                "invoice_id": invoice_id,
+                "deleted_at": datetime.now().isoformat()
+            }
+        )
+        
+    except ValueError as e:
+        logger.error(f"API: Error deleting invoice: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"API: Unexpected error deleting invoice: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete purchase invoice: {str(e)}"
+        )
+
 
 
 # ============================================================================
@@ -325,7 +515,8 @@ def add_payment_to_invoice(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
     payment_data: PaymentCreate = ...,
     db: Session = Depends(get_db),
-    performed_by_id: Optional[int] = Query(default=1, description="ID of user making payment")
+    performed_by_id: Optional[int] = Query(default=1, description="ID of user making payment"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Add a payment to an existing purchase invoice.
@@ -385,7 +576,8 @@ def add_payment_to_invoice(
 )
 def get_invoice_payments(
     invoice_id: str = Path(..., description="Purchase invoice ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get all payments for a specific purchase invoice."""
     try:
@@ -453,7 +645,8 @@ def get_invoice_payments(
 )
 def delete_payment(
     payment_id: str = Path(..., description="Payment ID to delete"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Delete a payment and reverse the financial entries."""
     try:
@@ -506,7 +699,8 @@ def get_supplier_invoices(
     payment_status: Optional[InvoiceStatusEnum] = Query(default=None, description="Filter by payment status"),
     skip: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=50, ge=1, le=500, description="Number of records to return"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get all purchase invoices from a specific supplier."""
     try:
@@ -555,7 +749,8 @@ def get_supplier_invoices(
 )
 def get_supplier_balance(
     supplier_id: int = Path(..., gt=0, description="Supplier ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get the current balance with a supplier."""
     try:
@@ -602,7 +797,8 @@ def get_supplier_balance(
     """
 )
 def get_all_suppliers_summary(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get comprehensive purchase summary for a supplier."""
     try:
@@ -651,7 +847,8 @@ def get_all_suppliers_summary(
 )
 def get_item_stock(
     item_id: str = Path(..., description="Item ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get comprehensive stock summary for an item."""
     try:
@@ -687,7 +884,8 @@ def get_item_stock(
 def get_item_history(
     item_id: str = Path(..., description="Item ID"),
     limit: int = Query(default=50, ge=1, le=500, description="Number of records to return"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get stock movement history for an item."""
     try:
@@ -741,7 +939,8 @@ def get_stock_ledger(
     limit: int = Query(default=100, ge=1, le=1000, description="Number of records to return"),
     item_id: Optional[str] = Query(default=None, description="Filter by item ID"),
     ref_type: Optional[str] = Query(default=None, description="Filter by reference type"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+current_user: User = Depends(get_current_active_user),
 ):
     """Get stock ledger entries with optional filters."""
     try:
