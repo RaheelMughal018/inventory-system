@@ -9,7 +9,7 @@ Combines best practices from both implementations:
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, Date
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from datetime import datetime
@@ -1059,6 +1059,18 @@ class PurchaseService:
     ) -> tuple[List[PurchaseInvoice], int]:
         """Get all purchase invoices with optional filtering."""
         try:
+              # ✅ ADD: Validate date range
+            if start_date and end_date and start_date > end_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="start_date must be before or equal to end_date"
+                )
+            
+            logger.info(
+                f"API: Listing purchase invoices - skip={skip}, limit={limit}, "
+                f"supplier_id={supplier_id}, start_date={start_date}, end_date={end_date}"
+            )
+
             query = (self.db.query(PurchaseInvoice)
                     .options(
                         joinedload(PurchaseInvoice.supplier),
@@ -1169,8 +1181,8 @@ class PurchaseService:
             }
 
 
-    def get_all_suppliers_purchase_summary(self) -> List[Dict[str, Any]]:
-        """Get comprehensive purchase summary for all suppliers."""
+    def get_all_suppliers_purchase_summary(self) -> Dict[str, Any]:
+        """Get comprehensive purchase summary for all suppliers, plus aggregated total."""
         try:
             logger.info("Generating purchase summary for all suppliers")
             
@@ -1178,20 +1190,38 @@ class PurchaseService:
             suppliers = self.db.query(User).filter(User.role == UserRole.supplier).all()
             if not suppliers:
                 logger.warning("No suppliers found")
-                return []
+                return {
+                    "summaries": [],
+                    "total": {
+                        "total_purchases": 0.0,
+                        "total_paid": 0.0,
+                        "outstanding_balance": 0.0,
+                        "total_invoices": 0,
+                        "unpaid_invoices": 0,
+                        "partial_invoices": 0,
+                        "paid_invoices": 0,
+                    },
+                }
             
             summaries = []
+            total_purchases = Decimal("0.00")
+            total_paid = Decimal("0.00")
+            total_outstanding = Decimal("0.00")
+            total_invoices = 0
+            total_unpaid = 0
+            total_partial = 0
+            total_paid_count = 0
 
             for supplier in suppliers:
                 supplier_id = supplier.id
                 
                 # Total purchases
-                total_purchases = self.db.query(func.sum(PurchaseInvoice.total_amount))\
+                total_purchases_s = self.db.query(func.sum(PurchaseInvoice.total_amount))\
                     .filter(PurchaseInvoice.supplier_id == supplier_id)\
                     .scalar() or Decimal("0.00")
                 
                 # Total paid
-                total_paid = self.db.query(func.sum(PurchaseInvoice.paid_amount))\
+                total_paid_s = self.db.query(func.sum(PurchaseInvoice.paid_amount))\
                     .filter(PurchaseInvoice.supplier_id == supplier_id)\
                     .scalar() or Decimal("0.00")
                 
@@ -1200,7 +1230,7 @@ class PurchaseService:
                 outstanding = balance_info.get('balance', Decimal("0.00"))
                 
                 # Count of invoices by status
-                total_invoices = self.db.query(PurchaseInvoice)\
+                total_invoices_s = self.db.query(PurchaseInvoice)\
                     .filter(PurchaseInvoice.supplier_id == supplier_id)\
                     .count()
                 
@@ -1219,21 +1249,39 @@ class PurchaseService:
                             PurchaseInvoice.payment_status == InvoiceStatus.PAID)\
                     .count()
                 
+                total_purchases += total_purchases_s
+                total_paid += total_paid_s
+                total_outstanding += outstanding
+                total_invoices += total_invoices_s
+                total_unpaid += unpaid_count
+                total_partial += partial_count
+                total_paid_count += paid_count
+                
                 summaries.append({
                     "supplier_id": supplier_id,
                     "supplier_name": supplier.name,
                     "supplier_user_id": supplier.user_id,
-                    "total_purchases": float(total_purchases),
-                    "total_paid": float(total_paid),
+                    "total_purchases": float(total_purchases_s),
+                    "total_paid": float(total_paid_s),
                     "outstanding_balance": float(outstanding),
-                    "total_invoices": total_invoices,
+                    "total_invoices": total_invoices_s,
                     "unpaid_invoices": unpaid_count,
                     "partial_invoices": partial_count,
                     "paid_invoices": paid_count
                 })
             
+            total = {
+                "total_purchases": float(total_purchases),
+                "total_paid": float(total_paid),
+                "outstanding_balance": float(total_outstanding),
+                "total_invoices": total_invoices,
+                "unpaid_invoices": total_unpaid,
+                "partial_invoices": total_partial,
+                "paid_invoices": total_paid_count,
+            }
+            
             logger.info(f"Generated purchase summaries for {len(suppliers)} suppliers")
-            return summaries
+            return {"summaries": summaries, "total": total}
 
         except Exception as e:
             logger.error(f"Error generating supplier summaries: {str(e)}")
@@ -1340,4 +1388,3 @@ class PurchaseService:
             return [], 0
 
 
- 

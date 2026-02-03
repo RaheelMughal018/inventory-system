@@ -1,14 +1,15 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: EmailStr | None
     name: str = Field(..., min_length=1, max_length=255)
     role: UserRole
 
+    model_config = ConfigDict(from_attributes=True)
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=100)

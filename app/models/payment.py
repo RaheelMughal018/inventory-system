@@ -26,6 +26,7 @@ class PaymentAccount(Base):
 
     created_at = Column(DateTime, server_default=func.now())
     payments = relationship("Payment", back_populates="account")
+    expenses = relationship("Expense", back_populates="account")
 
 
 class Payment(Base):

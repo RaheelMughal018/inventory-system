@@ -468,6 +468,23 @@ class SupplierPurchaseSummary(BaseModel):
         }
 
 
+class SupplierPurchaseSummaryTotal(BaseModel):
+    """Aggregated totals across all suppliers."""
+    total_purchases: float = 0.0
+    total_paid: float = 0.0
+    outstanding_balance: float = 0.0
+    total_invoices: int = 0
+    unpaid_invoices: int = 0
+    partial_invoices: int = 0
+    paid_invoices: int = 0
+
+
+class SupplierPurchaseSummaryResponse(BaseModel):
+    """Response for /suppliers/summary: list of supplier summaries plus totals."""
+    summaries: List["SupplierPurchaseSummary"]
+    total: SupplierPurchaseSummaryTotal
+
+
 # ============================================================================
 # Query Parameter Schemas
 # ============================================================================

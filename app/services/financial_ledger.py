@@ -1,9 +1,10 @@
 from typing import List, Optional, Tuple
 from sqlalchemy import Date, DateTime, cast, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.logger_config import logger
 from app.models.financial_ledger import FinancialLedger
+from app.models.user import User
 
 
 class FinancialLedgerService:
@@ -26,7 +27,8 @@ class FinancialLedgerService:
     ) -> Tuple[List[FinancialLedger], int, dict]:
 
         try:
-            query = self.db.query(FinancialLedger)
+            query = self.db.query(FinancialLedger).options(joinedload(FinancialLedger.user))
+
 
             if user_id:
                 query = query.filter(FinancialLedger.user_id == user_id)
@@ -36,6 +38,7 @@ class FinancialLedgerService:
                     or_(
                         FinancialLedger.ref_type.ilike(f"%{search}%"),
                         FinancialLedger.ref_id.ilike(f"%{search}%"),
+                        # User.name.ilike(f"%{search}%")
                     )
                 )
 
@@ -44,12 +47,13 @@ class FinancialLedgerService:
                 query = query.filter(
                     cast(FinancialLedger.created_at, Date) >= start_date
                 )
+                logger.debug(f"Filtering by start_date: {start_date}")
 
             if end_date:
                 query = query.filter(
                     cast(FinancialLedger.created_at, Date) <= end_date
                 )
-
+                logger.debug(f"Filtering by end_date: {end_date}")
             # Count (before pagination)
             total_count = query.count()
 

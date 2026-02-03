@@ -34,6 +34,7 @@ class User(Base):
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     ledger_entries = relationship("FinancialLedger", back_populates="user", cascade="all, delete-orphan")
     payment = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    expenses = relationship("Expense", back_populates="user")
 
     @staticmethod
     def generate_user_id(role: UserRole) -> str:

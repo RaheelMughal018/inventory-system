@@ -28,6 +28,7 @@ from app.schemas.purchase import (
     ItemStockSummary,
     SupplierBalance,
     SupplierPurchaseSummary,
+    SupplierPurchaseSummaryResponse,
     StockLedgerEntry,
     StockLedgerListResponse,
     SuccessResponse,
@@ -784,32 +785,33 @@ current_user: User = Depends(get_current_active_user),
 
 @router.get(
     "/suppliers/summary",
-    response_model=List[SupplierPurchaseSummary],
+    response_model=SupplierPurchaseSummaryResponse,
     summary="Get supplier purchase summary",
     description="""
-    Get comprehensive purchase summary for a supplier.
+    Get comprehensive purchase summary for all suppliers.
     
-    Includes:
-    - Total purchase amount
-    - Total paid amount
-    - Outstanding balance
-    - Invoice counts by status (unpaid, partial, paid)
+    Returns:
+    - summaries: list of per-supplier summaries (total purchases, paid, outstanding, invoice counts)
+    - total: aggregated totals across all suppliers
     """
 )
 def get_all_suppliers_summary(
     db: Session = Depends(get_db),
-current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Get comprehensive purchase summary for a supplier."""
+    """Get comprehensive purchase summary for all suppliers with aggregated total."""
     try:
         logger.info(f"API: Generating summary for suppliers")
         
         service = PurchaseService(db)
-        summaries = service.get_all_suppliers_purchase_summary()
+        result = service.get_all_suppliers_purchase_summary()
         
         logger.info(f"API: Summary generated for suppliers")
         
-        return summaries
+        return SupplierPurchaseSummaryResponse(
+            summaries=result["summaries"],
+            total=result["total"],
+        )
         
     except ValueError as e:
         logger.error(f"API: Error generating suppliers summary: {str(e)}")

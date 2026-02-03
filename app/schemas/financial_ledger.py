@@ -2,7 +2,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
-
+from app.schemas.user import UserBase
 
 
 
@@ -14,6 +14,7 @@ class FinancialLedgerBase(BaseModel):
     debit: Decimal
     credit: Decimal
     created_at: datetime
+    user: UserBase
 
     class Config:
         from_attributes = True
