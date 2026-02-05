@@ -7,26 +7,38 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _json_serializable(obj):
+    """Convert object to JSON-serializable form (e.g. Exception -> str)."""
+    if isinstance(obj, Exception):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_serializable(i) for i in obj]
+    return obj
+
+
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions (404, 400, etc.)"""
+    """Handle HTTP exceptions (404, 400, etc.). Ensure detail is JSON-serializable."""
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "success": False,
-            "message": exc.detail,
+            "message": _json_serializable(exc.detail),
             "status_code": exc.status_code,
             "error": type(exc).__name__
         }
     )
 
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors"""
+    """Handle validation errors. Sanitize errors so no Exception objects are serialized."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "success": False,
             "message": "Validation Error",
-            "errors": exc.errors(),
+            "errors": _json_serializable(exc.errors()),
             "status_code": 422
         }
     )

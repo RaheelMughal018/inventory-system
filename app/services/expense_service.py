@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import List, Optional, Tuple
 
-from sqlalchemy import Date, cast, func
+from sqlalchemy import Date, cast, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.logger_config import logger
@@ -120,8 +120,9 @@ def get_all_expenses(
     expense_date: Optional[date] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    search: Optional[str] = None,
 ) -> Tuple[List[Expense], int, Decimal]:
-    """List expenses with filters: user, category, day (or date range). Returns (rows, total_count, total_amount)."""
+    """List expenses with filters: user, category, day (or date range), search (name, description, category). Returns (rows, total_count, total_amount)."""
     query = (
         db.query(Expense)
         .options(
@@ -140,6 +141,15 @@ def get_all_expenses(
         query = query.filter(cast(Expense.date, Date) >= start_date)
     if end_date is not None:
         query = query.filter(cast(Expense.date, Date) <= end_date)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.outerjoin(ExpenseCategory, Expense.expense_category_id == ExpenseCategory.id).filter(
+            or_(
+                Expense.name.ilike(term),
+                Expense.description.ilike(term),
+                ExpenseCategory.name.ilike(term),
+            )
+        )
 
     total_count = query.count()
     total_row = query.with_entities(func.coalesce(func.sum(Expense.amount), 0)).first()

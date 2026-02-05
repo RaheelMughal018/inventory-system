@@ -101,9 +101,10 @@ def list_expenses(
     expense_date: Optional[date] = Query(None, description="Filter by specific day"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
+    search: Optional[str] = Query(None, description="Search by name, description, or category name"),
     current_user: User = Depends(get_current_active_user),
 ):
-    """List expenses with filters: user, category, day or date range."""
+    """List expenses with filters: user, category, day or date range, and search (name, description, category)."""
     try:
         rows, total_count, total_amount = get_all_expenses(
             db,
@@ -114,6 +115,7 @@ def list_expenses(
             expense_date=expense_date,
             start_date=start_date,
             end_date=end_date,
+            search=search,
         )
         return ExpenseListResponse(
             total=total_count,
