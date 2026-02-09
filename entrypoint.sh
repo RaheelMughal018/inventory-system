@@ -37,7 +37,7 @@ alembic upgrade head
 # Start the server
 echo "Starting FastAPI server..."
 if [ "$APP_ENV" = "production" ]; then
-    exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 4
+    exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2
 else
     exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --reload
 fi

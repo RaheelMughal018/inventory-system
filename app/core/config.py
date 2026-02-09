@@ -3,6 +3,25 @@ from pydantic import model_validator
 from urllib.parse import quote_plus
 import os
 
+# Env var names some platforms use for PostgreSQL (checked in order)
+_DATABASE_URL_ENV_ALIASES = (
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "DATABASE_PRIVATE_URL",
+    "POSTGRES_CONNECTION_STRING",
+    "POSTGRESQL_URL",
+)
+
+
+def _get_database_url_from_env() -> str | None:
+    """Get database URL from environment, trying common platform variable names."""
+    for name in _DATABASE_URL_ENV_ALIASES:
+        value = os.environ.get(name)
+        if value and value.strip().startswith("postgres"):
+            return value.strip()
+    return None
+
+
 class Settings(BaseSettings):
     APP_ENV: str = "local"
     
@@ -26,11 +45,17 @@ class Settings(BaseSettings):
     
     @model_validator(mode='after')
     def construct_database_url(self):
-        """Construct DATABASE_URL from components if not provided directly."""
+        """Construct DATABASE_URL from components or common env vars if not provided directly."""
+        if not self.DATABASE_URL:
+            # Try common platform env var names (Railway, Render, etc.)
+            self.DATABASE_URL = _get_database_url_from_env()
         if not self.DATABASE_URL:
             if not self.DB_NAME:
-                raise ValueError("Either DATABASE_URL or DB_NAME must be provided")
-            
+                raise ValueError(
+                    "Either DATABASE_URL or DB_NAME must be provided. "
+                    "On Railway: add variable DATABASE_URL = ${{Postgres.DATABASE_URL}}. "
+                    "On Render: link the PostgreSQL database to get DATABASE_URL."
+                )
             # URL encode password to handle special characters
             password_part = f":{quote_plus(self.DB_PASSWORD)}" if self.DB_PASSWORD else ""
             self.DATABASE_URL = f"postgresql://{self.DB_USER}{password_part}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
