@@ -48,6 +48,8 @@ def get_customers(
                 company_name=profile.company_name if profile else None,
                 phone=profile.phone if profile else None,
                 city=profile.city if profile else None,
+                opening_balance=profile.opening_balance if profile else 0.00,
+                opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
                 created_at=customer.created_at,
                 updated_at=customer.updated_at,
                 created_by_id=customer.created_by_id,
@@ -95,6 +97,8 @@ def get_customer(
         company_name=profile.company_name if profile else None,
         phone=profile.phone if profile else None,
         city=profile.city if profile else None,
+        opening_balance=profile.opening_balance if profile else 0.00,
+        opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
         created_at=customer.created_at,
         updated_at=customer.updated_at,
         created_by_id=customer.created_by_id,
@@ -123,10 +127,12 @@ def create_customer_route(
             company_name=customer_data.company_name,
             phone=customer_data.phone,
             city=customer_data.city,
+            opening_balance=customer_data.opening_balance,
+            opening_balance_type=customer_data.opening_balance_type,
             created_by_id=current_user.id
         )
         
-        logger.info(f"customer {customer.email} created by {current_user.email}")
+        logger.info(f"Customer {customer.name} created by {current_user.name}")
         
         profile = customer.profile
         return CustomerResponse(
@@ -137,6 +143,8 @@ def create_customer_route(
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
             city=profile.city if profile else None,
+            opening_balance=profile.opening_balance if profile else 0.00,
+            opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
             created_at=customer.created_at,
             updated_at=customer.updated_at,
             created_by_id=customer.created_by_id,
@@ -184,7 +192,9 @@ def update_customer_route(
             name=customer_data.name,
             company_name=customer_data.company_name,
             phone=customer_data.phone,
-            city=customer_data.city
+            city=customer_data.city,
+            opening_balance=customer_data.opening_balance,
+            opening_balance_type=customer_data.opening_balance_type
         )
         
         if not customer:
@@ -193,7 +203,7 @@ def update_customer_route(
                 detail="customer not found"
             )
         
-        logger.info(f"customer {customer_id} updated by {current_user.email}")
+        logger.info(f"Customer {customer_id} updated by {current_user.name}")
         
         profile = customer.profile
         return CustomerResponse(
@@ -203,6 +213,8 @@ def update_customer_route(
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
             city=profile.city if profile else None,
+            opening_balance=profile.opening_balance if profile else 0.00,
+            opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
             created_at=customer.created_at,
             updated_at=customer.updated_at,
             created_by_id=customer.created_by_id,

@@ -5,19 +5,28 @@ from app.api.v1 import auth, customer, financial_ledger, payment_supplier, purch
 
 app = FastAPI(title="Power Genix", version="1.0.0")
 
+# CORS Configuration
+# For development: Allow all origins
+# For production: Restrict to specific domains
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://localhost:5174",
+    "http://localhost:8080",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    # Add your production domains here
     # "https://dev-app.modernremodelingmd.com",
     # "https://app.modernremodelingmd.com"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Allow all origins in development - change to 'origins' list in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 register_error_handlers(app)

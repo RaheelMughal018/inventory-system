@@ -48,6 +48,8 @@ def get_suppliers(
                 company_name=profile.company_name if profile else None,
                 phone=profile.phone if profile else None,
                 city=profile.city if profile else None,
+                opening_balance=profile.opening_balance if profile else 0.00,
+                opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
                 created_at=supplier.created_at,
                 updated_at=supplier.updated_at,
                 created_by_id=supplier.created_by_id,
@@ -95,6 +97,8 @@ def get_supplier(
         company_name=profile.company_name if profile else None,
         phone=profile.phone if profile else None,
         city=profile.city if profile else None,
+        opening_balance=profile.opening_balance if profile else 0.00,
+        opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
         created_at=supplier.created_at,
         updated_at=supplier.updated_at,
         created_by_id=supplier.created_by_id,
@@ -123,10 +127,12 @@ def create_supplier_route(
             company_name=supplier_data.company_name,
             phone=supplier_data.phone,
             city=supplier_data.city,
+            opening_balance=supplier_data.opening_balance,
+            opening_balance_type=supplier_data.opening_balance_type,
             created_by_id=current_user.id
         )
         
-        logger.info(f"Supplier {supplier.email} created by {current_user.email}")
+        logger.info(f"Supplier {supplier.name} created by {current_user.name}")
         
         profile = supplier.profile
         return SupplierResponse(
@@ -137,6 +143,8 @@ def create_supplier_route(
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
             city=profile.city if profile else None,
+            opening_balance=profile.opening_balance if profile else 0.00,
+            opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
             created_at=supplier.created_at,
             updated_at=supplier.updated_at,
             created_by_id=supplier.created_by_id,
@@ -184,7 +192,9 @@ def update_supplier_route(
             name=supplier_data.name,
             company_name=supplier_data.company_name,
             phone=supplier_data.phone,
-            city=supplier_data.city
+            city=supplier_data.city,
+            opening_balance=supplier_data.opening_balance,
+            opening_balance_type=supplier_data.opening_balance_type
         )
         
         if not supplier:
@@ -193,7 +203,7 @@ def update_supplier_route(
                 detail="Supplier not found"
             )
         
-        logger.info(f"Supplier {supplier_id} updated by {current_user.email}")
+        logger.info(f"Supplier {supplier_id} updated by {current_user.name}")
         
         profile = supplier.profile
         return SupplierResponse(
@@ -203,6 +213,8 @@ def update_supplier_route(
             company_name=profile.company_name if profile else None,
             phone=profile.phone if profile else None,
             city=profile.city if profile else None,
+            opening_balance=profile.opening_balance if profile else 0.00,
+            opening_balance_type=profile.opening_balance_type if profile else 'DEBIT',
             created_at=supplier.created_at,
             updated_at=supplier.updated_at,
             created_by_id=supplier.created_by_id,

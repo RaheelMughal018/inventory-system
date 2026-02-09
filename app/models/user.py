@@ -66,6 +66,10 @@ class UserProfile(Base):
     # Business/Company details (for suppliers and customers)
     company_name = Column(String(255), nullable=True)
     
+    # Financial - Opening balance for suppliers/customers
+    opening_balance = Column(Numeric(15, 2), nullable=True, default=0.00)
+    opening_balance_type = Column(String(10), nullable=True, default='DEBIT')  # DEBIT or CREDIT
+    
     # Foreign key to user
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)  
     user = relationship("User", back_populates="profile")

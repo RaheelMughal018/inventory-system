@@ -2,8 +2,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from typing import Optional, List
+from decimal import Decimal
 from app.models.stock import PurchaseInvoice
 from app.models.user import User, UserRole, UserProfile
+from app.models.financial_ledger import FinancialLedger
 from app.core.security import get_password_hash
 from app.logger_config import logger
 
@@ -59,9 +61,15 @@ def create_supplier(
     company_name: Optional[str] = None,
     phone: Optional[str] = None,
     city: Optional[str] = None,
+    opening_balance: Optional[Decimal] = None,
+    opening_balance_type: Optional[str] = 'DEBIT',
     created_by_id: Optional[int] = None
 ) -> User:
-    """Create a new supplier."""
+    """Create a new supplier with optional opening balance.
+    
+    Args:
+        opening_balance_type: 'DEBIT' means you owe the supplier, 'CREDIT' means supplier owes you
+    """
     # Generate unique user_id
     user_id = User.generate_user_id(UserRole.supplier)
     
@@ -83,14 +91,46 @@ def create_supplier(
     db.add(user)
     db.flush()  # Flush to get user.id
     
+    # Set opening balance to 0 if not provided
+    if opening_balance is None:
+        opening_balance = Decimal('0.00')
+    
+    # Set default type if not provided
+    if opening_balance_type is None:
+        opening_balance_type = 'DEBIT'
+    
     # Create user profile with supplier-specific data
     profile = UserProfile(
         user_id=user.id,
         company_name=company_name,
         phone=phone,
-        city=city
+        city=city,
+        opening_balance=opening_balance,
+        opening_balance_type=opening_balance_type
     )
     db.add(profile)
+    db.flush()  # Flush to get profile created
+    
+    # Create financial ledger entry for opening balance if > 0
+    if opening_balance > 0:
+        if opening_balance_type == 'DEBIT':
+            # You owe the supplier (liability)
+            debit_amt = opening_balance
+            credit_amt = Decimal('0.00')
+        else:  # CREDIT
+            # Supplier owes you (asset)
+            debit_amt = Decimal('0.00')
+            credit_amt = opening_balance
+        
+        ledger_entry = FinancialLedger(
+            user_id=user.id,
+            ref_type="OPENING_BALANCE",
+            ref_id=f"OB-{user.user_id}",
+            debit=debit_amt,
+            credit=credit_amt
+        )
+        db.add(ledger_entry)
+        logger.info(f"Created opening balance ledger entry: Supplier {user.user_id}, Type: {opening_balance_type}, Amount: {opening_balance}")
     
     try:
         db.commit()
@@ -110,9 +150,15 @@ def update_supplier(
     email: Optional[str] = None,
     company_name: Optional[str] = None,
     phone: Optional[str] = None,
-    city: Optional[str] = None
+    city: Optional[str] = None,
+    opening_balance: Optional[Decimal] = None,
+    opening_balance_type: Optional[str] = None
 ) -> Optional[User]:
-    """Update supplier information."""
+    """Update supplier information and adjust opening balance if needed.
+    
+    Args:
+        opening_balance_type: 'DEBIT' means you owe the supplier, 'CREDIT' means supplier owes you
+    """
     user = get_supplier_by_id(db, supplier_id)
     if not user:
         return None
@@ -128,21 +174,101 @@ def update_supplier(
     
     # Update profile information
     if user.profile:
+        old_opening_balance = user.profile.opening_balance or Decimal('0.00')
+        old_opening_balance_type = user.profile.opening_balance_type or 'DEBIT'
+        
         if company_name is not None:
             user.profile.company_name = company_name
         if phone is not None:
             user.profile.phone = phone
         if city is not None:
             user.profile.city = city
+        
+        # Handle opening balance or type update
+        balance_changed = opening_balance is not None and opening_balance != old_opening_balance
+        type_changed = opening_balance_type is not None and opening_balance_type != old_opening_balance_type
+        
+        if balance_changed or type_changed:
+            # Update profile values
+            if opening_balance is not None:
+                user.profile.opening_balance = opening_balance
+            else:
+                opening_balance = old_opening_balance
+                
+            if opening_balance_type is not None:
+                user.profile.opening_balance_type = opening_balance_type
+            else:
+                opening_balance_type = old_opening_balance_type
+            
+            # Check if there's an existing opening balance ledger entry
+            existing_ob_entry = db.query(FinancialLedger).filter(
+                FinancialLedger.user_id == supplier_id,
+                FinancialLedger.ref_type == "OPENING_BALANCE"
+            ).first()
+            
+            if opening_balance > 0:
+                # Determine debit/credit based on type
+                if opening_balance_type == 'DEBIT':
+                    debit_amt = opening_balance
+                    credit_amt = Decimal('0.00')
+                else:  # CREDIT
+                    debit_amt = Decimal('0.00')
+                    credit_amt = opening_balance
+                
+                if existing_ob_entry:
+                    # Update existing entry
+                    existing_ob_entry.debit = debit_amt
+                    existing_ob_entry.credit = credit_amt
+                    logger.info(f"Updated opening balance ledger: Supplier {user.user_id}, Type: {opening_balance_type}, Amount: {opening_balance}")
+                else:
+                    # Create new opening balance entry
+                    ledger_entry = FinancialLedger(
+                        user_id=supplier_id,
+                        ref_type="OPENING_BALANCE",
+                        ref_id=f"OB-{user.user_id}",
+                        debit=debit_amt,
+                        credit=credit_amt
+                    )
+                    db.add(ledger_entry)
+                    logger.info(f"Created opening balance ledger: Supplier {user.user_id}, Type: {opening_balance_type}, Amount: {opening_balance}")
+            elif existing_ob_entry and opening_balance == 0:
+                # Remove opening balance entry if set to 0
+                db.delete(existing_ob_entry)
+                logger.info(f"Removed opening balance ledger: Supplier {user.user_id}")
     else:
         # Create profile if it doesn't exist
+        opening_bal = opening_balance if opening_balance is not None else Decimal('0.00')
+        opening_bal_type = opening_balance_type if opening_balance_type is not None else 'DEBIT'
+        
         profile = UserProfile(
             user_id=user.id,
             company_name=company_name,
             phone=phone,
-            city=city
+            city=city,
+            opening_balance=opening_bal,
+            opening_balance_type=opening_bal_type
         )
         db.add(profile)
+        db.flush()
+        
+        # Create opening balance ledger entry if > 0
+        if opening_bal > 0:
+            if opening_bal_type == 'DEBIT':
+                debit_amt = opening_bal
+                credit_amt = Decimal('0.00')
+            else:  # CREDIT
+                debit_amt = Decimal('0.00')
+                credit_amt = opening_bal
+                
+            ledger_entry = FinancialLedger(
+                user_id=supplier_id,
+                ref_type="OPENING_BALANCE",
+                ref_id=f"OB-{user.user_id}",
+                debit=debit_amt,
+                credit=credit_amt
+            )
+            db.add(ledger_entry)
+            logger.info(f"Created opening balance ledger: Supplier {user.user_id}, Type: {opening_bal_type}, Amount: {opening_bal}")
     
     try:
         db.commit()
