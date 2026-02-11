@@ -19,7 +19,7 @@ from app.logger_config import logger
 router = APIRouter()
 
 @router.post(
-    "/",
+    "",  # No trailing slash - matches /api/v1/payment-supplier (avoids 307 redirect)
     response_model=DirectPaymentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Make direct payment to supplier",
