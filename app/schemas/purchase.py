@@ -69,21 +69,24 @@ class PurchaseInvoiceCreate(BaseModel):
     """Schema for creating a new purchase invoice"""
     supplier_id: int = Field(..., gt=0, description="Supplier user ID")
     items: List[PurchaseItemCreate] = Field(
-        ..., 
-        min_length=1, 
+        ...,
+        min_length=1,
         description="List of items to purchase (at least one required)"
     )
     payment_amount: Optional[Decimal] = Field(
-        default=Decimal('0.00'), 
-        ge=0, 
+        default=Decimal('0.00'),
+        ge=0,
         description="Amount paid during purchase"
     )
     payment_account_id: Optional[str] = Field(
-        default=None, 
+        default=None,
         description="Payment account ID if payment is made"
     )
-    
-    
+    invoice_date: Optional[datetime] = Field(
+        default=None,
+        description="Invoice date/time. If omitted, server uses current date/time. From frontend: ISO 8601 string e.g. '2025-02-09' or '2025-02-09T14:30:00'"
+    )
+
     @model_validator(mode='after')
     def validate_payment_account(self):
         """If payment_amount > 0, payment_account_id is required"""
@@ -102,6 +105,7 @@ class PurchaseInvoiceCreate(BaseModel):
                 ],
                 "payment_amount": 20.00,
                 "payment_account_id": "ACC-CASH1",
+                "invoice_date": "2025-02-09T10:00:00"
             }
         }
 

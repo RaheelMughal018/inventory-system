@@ -9,6 +9,7 @@ from app.logger_config import logger
 from app.models.expense import Expense, ExpenseCategory
 from app.models.financial_ledger import FinancialLedger
 from app.models.payment import PaymentAccount
+from app.services.account_service import get_account_balance, add_account_ledger_entry
 
 
 def _today() -> date:
@@ -35,7 +36,13 @@ def create_expense(
     expense_date: Optional[date] = None,
     ledger_user_id: Optional[int] = None,
 ) -> Expense:
-    """Create a single expense; date defaults to today. Creates a financial ledger entry (debit=amount)."""
+    """Create a single expense; date defaults to today. Creates financial ledger and account ledger (debit)."""
+    # Check account has sufficient balance
+    acc_balance = get_account_balance(db, account_id)
+    if acc_balance < amount:
+        raise ValueError(
+            f"Insufficient balance in account. Available: {acc_balance}, Required: {amount}"
+        )
     d = expense_date or _today()
     expense = Expense(
         date=d,
@@ -58,6 +65,14 @@ def create_expense(
         expense_id=expense.id,
     )
     db.add(ledger_entry)
+    add_account_ledger_entry(
+        db,
+        account_id=account_id,
+        ref_type="EXPENSE",
+        ref_id=expense.id,
+        debit=amount,
+        credit=Decimal("0.00"),
+    )
     try:
         db.commit()
         db.refresh(expense)
@@ -74,15 +89,22 @@ def create_expenses_bulk(
     expense_date: Optional[date] = None,
     ledger_user_id: Optional[int] = None,
 ) -> List[Expense]:
-    """Create multiple expenses for a day (e.g. current day). Creates a financial ledger entry per expense. items: list of {amount, account_id, expense_category_id, description?, user_id?}."""
+    """Create multiple expenses for a day. Each expense checks account balance and creates account ledger debit."""
     d = expense_date or _today()
     created = []
     for item in items:
+        amount = item["amount"]
+        account_id = item["account_id"]
+        acc_balance = get_account_balance(db, account_id)
+        if acc_balance < amount:
+            raise ValueError(
+                f"Insufficient balance in account {account_id}. Available: {acc_balance}, Required: {amount}"
+            )
         expense = Expense(
             date=d,
-            amount=item["amount"],
+            amount=amount,
             name=item["name"],
-            account_id=item["account_id"],
+            account_id=account_id,
             expense_category_id=item["expense_category_id"],
             description=item.get("description"),
             user_id=item.get("user_id"),
@@ -99,6 +121,14 @@ def create_expenses_bulk(
             expense_id=expense.id,
         )
         db.add(ledger_entry)
+        add_account_ledger_entry(
+            db,
+            account_id=account_id,
+            ref_type="EXPENSE",
+            ref_id=expense.id,
+            debit=expense.amount,
+            credit=Decimal("0.00"),
+        )
         created.append(expense)
     try:
         db.commit()

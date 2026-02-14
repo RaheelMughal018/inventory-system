@@ -179,7 +179,8 @@ def create_purchase_invoice(
             items=items,
             payment_amount=purchase_data.payment_amount or Decimal('0.00'),
             payment_account_id=purchase_data.payment_account_id,
-            performed_by_id=performed_by_id
+            performed_by_id=performed_by_id,
+            invoice_date=purchase_data.invoice_date,
         )
         
         logger.info(f"API: Purchase invoice created successfully: {invoice.id}")
@@ -620,6 +621,51 @@ def get_invoice_payments(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve payments: {str(e)}"
+        )
+
+
+@router.post(
+    "/sale-invoices/{invoice_id}/payments",
+    response_model=PaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record payment received for a sale invoice",
+    description="Record payment received from customer into a payment account (credits the account).",
+    responses={
+        201: {"description": "Payment recorded"},
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        404: {"model": ErrorResponse, "description": "Sale invoice or account not found"},
+    },
+)
+def add_payment_to_sale_invoice(
+    invoice_id: str = Path(..., description="Sale invoice ID"),
+    payment_data: PaymentCreate = ...,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Record payment received against a sale invoice (money in)."""
+    try:
+        service = PurchaseService(db)
+        payment = service.add_payment_to_sale_invoice(
+            invoice_id=invoice_id,
+            amount=payment_data.amount,
+            account_id=payment_data.account_id,
+        )
+        return PaymentResponse(
+            id=payment.id,
+            amount=payment.amount,
+            account_id=payment.account_id,
+            account_name=payment.account.name if payment.account else None,
+            account_type=payment.account.type.value if payment.account else None,
+            payment_type=payment.payment_type.value,
+            created_at=payment.created_at,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"API: Error adding sale payment: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
         )
 
 

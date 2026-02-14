@@ -4,7 +4,7 @@ from sqlalchemy import or_, func
 from typing import Optional, List
 from decimal import Decimal
 from app.models.item_category import generate_custom_id
-from app.models.payment import Payment, PaymentAccountType, PaymentAccount
+from app.models.payment import Payment, PaymentAccountType, PaymentAccount, AccountLedger
 
 from app.logger_config import logger
 
@@ -57,28 +57,78 @@ def get_all_accounts(
     return accounts, count
 
 
+def get_account_balance(db: Session, account_id: str) -> Decimal:
+    """
+    Current balance of a payment account = opening_balance + sum(credits) - sum(debits).
+    Credits = money in (opening, sale received). Debits = money out (supplier, purchase, expense).
+    """
+    account = get_account_by_id(db, account_id)
+    if not account:
+        raise ValueError(f"Account {account_id} not found")
+    opening = (account.opening_balance or Decimal("0.00"))
+    row = db.query(
+        func.coalesce(func.sum(AccountLedger.credit), 0).label("total_credit"),
+        func.coalesce(func.sum(AccountLedger.debit), 0).label("total_debit"),
+    ).filter(AccountLedger.account_id == account_id).first()
+    total_credit = row.total_credit or Decimal("0.00")
+    total_debit = row.total_debit or Decimal("0.00")
+    return opening + total_credit - total_debit
+
+
+def add_account_ledger_entry(
+    db: Session,
+    account_id: str,
+    ref_type: str,
+    ref_id: Optional[str] = None,
+    debit: Decimal = Decimal("0.00"),
+    credit: Decimal = Decimal("0.00"),
+) -> AccountLedger:
+    """Record a debit or credit to an account (e.g. PAYMENT_SUPPLIER, PAYMENT_PURCHASE, PAYMENT_SALE, EXPENSE, OPENING_BALANCE)."""
+    entry = AccountLedger(
+        account_id=account_id,
+        ref_type=ref_type,
+        ref_id=ref_id,
+        debit=debit,
+        credit=credit,
+    )
+    db.add(entry)
+    return entry
+
+
 def create_account(
     db: Session,
     name: str,
     type: PaymentAccountType,
+    opening_balance: Optional[Decimal] = None,
 ) -> PaymentAccount:
-    """Create a new payment account."""
-
-    # if get_account_by_name(db, name):
-    #     raise ValueError("Payment account with this name already exists")
+    """Create a new payment account with optional opening balance and ledger entry."""
 
     account_id = generate_custom_id("ACC")
 
     while get_account_by_id(db, account_id):
         account_id = generate_custom_id("ACC")
 
+    opening = opening_balance if opening_balance is not None else Decimal("0.00")
+
     account = PaymentAccount(
         id=account_id,
         name=name,
         type=type,
+        opening_balance=opening,
     )
 
     db.add(account)
+    db.flush()
+
+    if opening > 0:
+        add_account_ledger_entry(
+            db,
+            account_id=account_id,
+            ref_type="OPENING_BALANCE",
+            ref_id=f"OB-{account_id}",
+            debit=Decimal("0.00"),
+            credit=opening,
+        )
 
     try:
         db.commit()
@@ -97,7 +147,7 @@ def update_account(
     type: Optional[PaymentAccountType] = None,
     opening_balance: Optional[Decimal] = None
 ) -> Optional[PaymentAccount]:
-    """Update payment account."""
+    """Update payment account. If opening_balance changes, update or create OPENING_BALANCE ledger entry."""
 
     account = get_account_by_id(db, account_id)
     if not account:
@@ -110,7 +160,24 @@ def update_account(
         account.type = type
 
     if opening_balance is not None:
+        old_opening = account.opening_balance or Decimal("0.00")
         account.opening_balance = opening_balance
+        ob_entry = db.query(AccountLedger).filter(
+            AccountLedger.account_id == account_id,
+            AccountLedger.ref_type == "OPENING_BALANCE"
+        ).first()
+        if ob_entry:
+            ob_entry.credit = opening_balance
+            ob_entry.debit = Decimal("0.00")
+        elif opening_balance > 0:
+            add_account_ledger_entry(
+                db,
+                account_id=account_id,
+                ref_type="OPENING_BALANCE",
+                ref_id=f"OB-{account_id}",
+                debit=Decimal("0.00"),
+                credit=opening_balance,
+            )
 
     try:
         db.commit()

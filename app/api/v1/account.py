@@ -11,6 +11,7 @@ from app.services.account_service import (
     get_account_by_id,
     get_account_by_name,
     get_all_accounts,
+    get_account_balance,
     update_account,
     delete_account
 )
@@ -20,7 +21,9 @@ from app.schemas.account import (
     AccountListResponse,
     AccountCreate,
     UpdateAccount,
+    AccountBalanceResponse,
 )
+from decimal import Decimal
 from app.logger_config import logger
 
 router = APIRouter()
@@ -52,23 +55,45 @@ def get_accounts(
         )
 
 
+@router.get("/{account_id}/balance", response_model=AccountBalanceResponse)
+def get_account_balance_route(
+    account_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get current balance of a payment account (opening + credits - debits)."""
+    account = get_account_by_id(db, account_id)
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found"
+        )
+    try:
+        balance = get_account_balance(db, account_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    opening = account.opening_balance or Decimal("0.00")
+    return AccountBalanceResponse(
+        account_id=account_id,
+        account_name=account.name,
+        balance=balance,
+        opening_balance=opening,
+    )
+
+
 @router.get("/{account_id}", response_model=AccountResponse)
 def get_account(
     account_id: str,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get Account by Id
-    """
+    """Get account by ID."""
     account = get_account_by_id(db, account_id)
-
     if not account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not Found"
         )
-
     return AccountResponse.model_validate(account)
 
 
@@ -85,7 +110,8 @@ def create_account_route(
         account = create_account(
             db=db,
             name=account_data.name,
-            type=account_data.type
+            type=account_data.type,
+            opening_balance=account_data.opening_balance,
         )
         logger.info(
             f"Account {account_data.name} created by {current_user.name}")
@@ -122,7 +148,7 @@ def update_account_route(
             account_id=account_id,
             name=account_data.name,
             type=account_data.type,
-
+            opening_balance=account_data.opening_balance,
         )
 
         if not account:

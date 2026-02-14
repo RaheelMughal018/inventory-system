@@ -15,15 +15,17 @@ from decimal import Decimal
 from datetime import datetime
 
 from app.models.stock import (
-    PurchaseInvoice, 
-    PurchaseItem, 
-    Stock, 
-    InvoiceStatus
+    PurchaseInvoice,
+    PurchaseItem,
+    Stock,
+    SaleInvoice,
+    InvoiceStatus,
 )
 from app.models.item_category import Item, generate_custom_id
 from app.models.financial_ledger import FinancialLedger
 from app.models.payment import Payment, PaymentType, PaymentAccount
 from app.models.user import User, UserRole
+from app.services.account_service import get_account_balance, add_account_ledger_entry
 from app.logger_config import logger
 
 
@@ -85,22 +87,39 @@ def get_user_balance(db: Session, user_id: int) -> Decimal:
 
 
 def generate_unique_id(db: Session, prefix: str, model_class, length: int = 8) -> str:
-    """Generate a unique ID for a model."""
+    """Generate a unique ID for a model (random alphanumeric)."""
     attempts = 0
     max_attempts = 10
-    
+
     while attempts < max_attempts:
         new_id = generate_custom_id(prefix, length=length)
         existing = db.query(model_class).filter(model_class.id == new_id).first()
-        
+
         if not existing:
             logger.debug(f"Generated unique ID: {new_id}")
             return new_id
-        
+
         attempts += 1
-    
+
     logger.error(f"Failed to generate unique {prefix} ID after {max_attempts} attempts")
     raise ValueError(f"Failed to generate unique {prefix} ID")
+
+
+def generate_next_pinv_id(db: Session) -> str:
+    """
+    Generate next purchase invoice ID in sequence: PINV-001, PINV-002, ...
+    Uses the highest existing numeric part; ignores non-numeric IDs (e.g. old PINV-ABC12).
+    """
+    ids = db.query(PurchaseInvoice.id).filter(PurchaseInvoice.id.like("PINV-%")).all()
+    max_num = 0
+    for (id_val,) in ids:
+        part = id_val.split("-", 1)[-1] if "-" in id_val else ""
+        if part.isdigit():
+            max_num = max(max_num, int(part))
+    next_num = max_num + 1
+    new_id = f"PINV-{next_num:03d}"
+    logger.debug(f"Generated next PINV ID: {new_id}")
+    return new_id
 
 
 # ==================== PURCHASE SERVICE CLASS ====================
@@ -122,11 +141,12 @@ class PurchaseService:
         items: List[Dict[str, Any]],
         payment_amount: Decimal = Decimal('0.00'),
         payment_account_id: Optional[str] = None,
-        performed_by_id: Optional[int] = None
+        performed_by_id: Optional[int] = None,
+        invoice_date: Optional[datetime] = None,
     ) -> PurchaseInvoice:
         """
         Create a complete purchase transaction with all ledger entries.
-        
+
         Args:
             supplier_id: ID of the supplier
             items: List of dicts with keys: item_id, quantity, unit_price
@@ -134,7 +154,8 @@ class PurchaseService:
             payment_amount: Amount paid at the time of purchase
             payment_account_id: Account used for payment (if any)
             performed_by_id: ID of user creating this purchase
-            
+            invoice_date: Optional invoice date/time. If None, uses current date/time.
+
         Returns:
             PurchaseInvoice: Created purchase invoice with all relationships
             
@@ -168,16 +189,18 @@ class PurchaseService:
             balance_due = total_amount - payment_amount
             payment_status = self._determine_payment_status(total_amount, payment_amount)
             
-            # 4. Create Purchase Invoice with unique ID
-            invoice_id = generate_unique_id(self.db, "PINV", PurchaseInvoice, length=8)
-            
+            # 4. Create Purchase Invoice with sequential ID (PINV-001, PINV-002, ...)
+            invoice_id = generate_next_pinv_id(self.db)
+            created_at = invoice_date if invoice_date is not None else datetime.now()
+
             invoice = PurchaseInvoice(
                 id=invoice_id,
                 supplier_id=supplier_id,
                 total_amount=total_amount,
                 paid_amount=payment_amount,
                 balance_due=balance_due,
-                payment_status=payment_status
+                payment_status=payment_status,
+                created_at=created_at,
             )
             self.db.add(invoice)
             self.db.flush()  # Flush to get invoice ID for relationships
@@ -828,6 +851,16 @@ class PurchaseService:
         )
         self.db.add(payment_ledger)
         
+        # Debit payment account (money out)
+        add_account_ledger_entry(
+            self.db,
+            account_id=account_id,
+            ref_type="PAYMENT_PURCHASE",
+            ref_id=payment.id,
+            debit=amount,
+            credit=Decimal('0.00'),
+        )
+        
         supplier_balance_after = supplier_balance_before - amount
         
         logger.info(
@@ -898,6 +931,18 @@ class PurchaseService:
                     f"Payment amount ({amount}) exceeds balance due ({invoice.balance_due})"
                 )
             
+            # 2b. Check payment account has sufficient balance
+            # try:
+            #     acc_balance = get_account_balance(self.db, account_id)
+            #     if acc_balance < amount:
+            #         raise ValueError(
+            #             f"Insufficient balance in account. Available: {acc_balance}, Required: {amount}"
+            #         )
+            # except ValueError as e:
+            #     if "not found" in str(e).lower() or "Insufficient" in str(e):
+            #         raise
+            #     raise ValueError(f"Payment account error: {e}")
+            
             # 3. Process payment
             self._process_purchase_payment(
                 invoice,
@@ -956,6 +1001,78 @@ class PurchaseService:
             logger.error(f"Unexpected error in payment creation: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to create payment: {str(e)}")
 
+    def add_payment_to_sale_invoice(
+        self,
+        invoice_id: str,
+        amount: Decimal,
+        account_id: str,
+    ) -> Payment:
+        """
+        Record payment received against a sale invoice (customer pays us). Credits the payment account.
+        """
+        invoice = (
+            self.db.query(SaleInvoice)
+            .filter(SaleInvoice.id == invoice_id)
+            .first()
+        )
+        if not invoice:
+            raise ValueError("Sale invoice not found")
+        if amount <= 0:
+            raise ValueError("Payment amount must be greater than 0")
+        if amount > invoice.balance_due:
+            raise ValueError(
+                f"Payment amount ({amount}) exceeds balance due ({invoice.balance_due})"
+            )
+        account = self.db.query(PaymentAccount).filter(PaymentAccount.id == account_id).first()
+        if not account:
+            raise ValueError(f"Payment account {account_id} not found")
+
+        payment_type = PaymentType.FULL if amount >= invoice.balance_due else PaymentType.PARTIAL
+        payment_id = generate_unique_id(self.db, "PAY", Payment, length=8)
+        payment = Payment(
+            id=payment_id,
+            user_id=invoice.customer_id,
+            purchase_invoice_id=None,
+            sale_invoice_id=invoice.id,
+            amount=amount,
+            account_id=account_id,
+            payment_type=payment_type,
+        )
+        self.db.add(payment)
+        self.db.flush()
+
+        # Customer ledger: credit = they paid (reduces what they owe)
+        fl = FinancialLedger(
+            user_id=invoice.customer_id,
+            ref_type="PAYMENT_SALE",
+            ref_id=payment.id,
+            debit=Decimal("0.00"),
+            credit=amount,
+        )
+        self.db.add(fl)
+
+        # Account ledger: credit = money in
+        add_account_ledger_entry(
+            self.db,
+            account_id=account_id,
+            ref_type="PAYMENT_SALE",
+            ref_id=payment.id,
+            debit=Decimal("0.00"),
+            credit=amount,
+        )
+
+        invoice.recieved_amount += amount
+        invoice.balance_due -= amount
+        invoice.payment_status = self._determine_payment_status(
+            invoice.total_amount,
+            invoice.recieved_amount,
+        )
+
+        self.db.commit()
+        self.db.refresh(payment)
+        logger.info(f"Sale payment recorded: {payment_id} for invoice {invoice_id}, amount {amount}")
+        return payment
+
     def delete_payment(self, payment_id: str) -> bool:
         """
         Delete a payment and reverse the financial entries.
@@ -1005,6 +1122,17 @@ class PurchaseService:
             if ledger_entry:
                 self.db.delete(ledger_entry)
                 logger.debug(f"Financial ledger entry deleted for payment {payment_id}")
+            
+            # Reverse account ledger (credit back - money returned to account)
+            if payment.account_id:
+                add_account_ledger_entry(
+                    self.db,
+                    account_id=payment.account_id,
+                    ref_type="PAYMENT_PURCHASE_REVERSE",
+                    ref_id=payment_id,
+                    debit=Decimal('0.00'),
+                    credit=amount,
+                )
             
             # Delete payment
             self.db.delete(payment)

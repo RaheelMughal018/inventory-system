@@ -26,6 +26,7 @@ from app.models.item_category import generate_custom_id
 from app.models.financial_ledger import FinancialLedger
 from app.models.payment import Payment, PaymentType, PaymentAccount
 from app.models.user import User, UserRole
+from app.services.account_service import get_account_balance, add_account_ledger_entry
 from app.logger_config import logger
 
 
@@ -139,6 +140,13 @@ class DirectPaymentService:
             if not account:
                 raise ValueError(f"Payment account {account_id} not found")
             
+            # Check account has sufficient balance
+            account_balance = get_account_balance(self.db, account_id)
+            if account_balance < amount:
+                raise ValueError(
+                    f"Insufficient balance in account. Available: {account_balance}, Required: {amount}"
+                )
+            
             # Get outstanding invoices (sorted by method)
             query = self.db.query(PurchaseInvoice).filter(
                 PurchaseInvoice.supplier_id == supplier_id,
@@ -192,15 +200,26 @@ class DirectPaymentService:
                     "invoice_status": invoice.payment_status.value
                 })
             
-            # Create financial ledger entry
+            # Create financial ledger entry (supplier side)
+            batch_ref = f"BATCH-{datetime.now().strftime('%Y%m%d%H%M%S')}"
             ledger = FinancialLedger(
                 user_id=supplier_id,
                 ref_type="DIRECT_PAYMENT",
-                ref_id=f"BATCH-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                ref_id=batch_ref,
                 debit=Decimal('0.00'),
                 credit=amount
             )
             self.db.add(ledger)
+            
+            # Debit payment account (money out)
+            add_account_ledger_entry(
+                self.db,
+                account_id=account_id,
+                ref_type="PAYMENT_SUPPLIER",
+                ref_id=batch_ref,
+                debit=amount,
+                credit=Decimal('0.00'),
+            )
             
             self.db.commit()
             
