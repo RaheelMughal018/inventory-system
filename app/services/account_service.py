@@ -59,20 +59,13 @@ def get_all_accounts(
 
 def get_account_balance(db: Session, account_id: str) -> Decimal:
     """
-    Current balance of a payment account = opening_balance + sum(credits) - sum(debits).
-    Credits = money in (opening, sale received). Debits = money out (supplier, purchase, expense).
+    Get current balance of a payment account.
+    Current balance is updated directly on every transaction.
     """
     account = get_account_by_id(db, account_id)
     if not account:
         raise ValueError(f"Account {account_id} not found")
-    opening = (account.opening_balance or Decimal("0.00"))
-    row = db.query(
-        func.coalesce(func.sum(AccountLedger.credit), 0).label("total_credit"),
-        func.coalesce(func.sum(AccountLedger.debit), 0).label("total_debit"),
-    ).filter(AccountLedger.account_id == account_id).first()
-    total_credit = row.total_credit or Decimal("0.00")
-    total_debit = row.total_debit or Decimal("0.00")
-    return opening + total_credit - total_debit
+    return account.current_balance or Decimal("0.00")
 
 
 def add_account_ledger_entry(
@@ -101,7 +94,7 @@ def create_account(
     type: PaymentAccountType,
     opening_balance: Optional[Decimal] = None,
 ) -> PaymentAccount:
-    """Create a new payment account with optional opening balance and ledger entry."""
+    """Create a new payment account with optional opening balance. Sets current_balance = opening_balance."""
 
     account_id = generate_custom_id("ACC")
 
@@ -115,6 +108,7 @@ def create_account(
         name=name,
         type=type,
         opening_balance=opening,
+        current_balance=opening,  # Set current balance equal to opening balance
     )
 
     db.add(account)
@@ -147,7 +141,7 @@ def update_account(
     type: Optional[PaymentAccountType] = None,
     opening_balance: Optional[Decimal] = None
 ) -> Optional[PaymentAccount]:
-    """Update payment account. If opening_balance changes, update or create OPENING_BALANCE ledger entry."""
+    """Update payment account. If opening_balance changes, adjust current_balance accordingly."""
 
     account = get_account_by_id(db, account_id)
     if not account:
@@ -161,7 +155,15 @@ def update_account(
 
     if opening_balance is not None:
         old_opening = account.opening_balance or Decimal("0.00")
+        difference = opening_balance - old_opening
+        
+        # Update opening balance
         account.opening_balance = opening_balance
+        
+        # Adjust current balance by the difference
+        account.current_balance = (account.current_balance or Decimal("0.00")) + difference
+        
+        # Update or create ledger entry
         ob_entry = db.query(AccountLedger).filter(
             AccountLedger.account_id == account_id,
             AccountLedger.ref_type == "OPENING_BALANCE"

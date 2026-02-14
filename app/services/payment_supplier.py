@@ -112,12 +112,17 @@ class DirectPaymentService:
         - LIFO: Pay newest invoices first
         - PROPORTIONAL: Distribute proportionally
         """
-        outstanding = self.get_supplier_outstanding_balance(supplier_id)
+        # Check account has sufficient balance
+        account_balance = get_account_balance(self.db, account_id)
+        if account_balance < amount:
+            raise ValueError(
+                f"Insufficient balance in account. Available: {account_balance}, Required: {amount}"
+            )
 
+        outstanding = self.get_supplier_outstanding_balance(supplier_id)
         if amount > outstanding["outstanding_balance"]:
             raise ValueError(
-                f"Payment amount exceeds supplier outstanding balance "
-                f"({outstanding['outstanding_balance']})"
+                f"Payment amount exceeds supplier outstanding balance ({outstanding['outstanding_balance']})"
             )
 
         logger.info(f"Direct payment - Supplier: {supplier_id}, Amount: {amount}")
@@ -207,7 +212,8 @@ class DirectPaymentService:
                 ref_type="DIRECT_PAYMENT",
                 ref_id=batch_ref,
                 debit=Decimal('0.00'),
-                credit=amount
+                credit=amount,
+                account_id=account_id  # Track which account was used for payment
             )
             self.db.add(ledger)
             
@@ -220,6 +226,9 @@ class DirectPaymentService:
                 debit=amount,
                 credit=Decimal('0.00'),
             )
+            
+            # Update current balance - deduct payment amount
+            account.current_balance = (account.current_balance or Decimal('0.00')) - amount
             
             self.db.commit()
             

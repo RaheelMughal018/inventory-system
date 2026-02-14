@@ -22,6 +22,7 @@ class AccountResponse(BaseModel):
     name: str
     type: PaymentAccountType
     opening_balance: Optional[Decimal] = Decimal("0")
+    current_balance: Decimal = Decimal("0")
     created_at: datetime
 
     class Config:
@@ -31,8 +32,9 @@ class AccountResponse(BaseModel):
 class AccountBalanceResponse(BaseModel):
     account_id: str
     account_name: str
-    balance: Decimal
+    balance: Decimal  # Same as current_balance
     opening_balance: Decimal
+    current_balance: Decimal
 
 
 class AccountDeleteResponse(BaseModel):

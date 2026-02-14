@@ -20,11 +20,13 @@ def _json_serializable(obj):
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions (404, 400, etc.). Ensure detail is JSON-serializable."""
+    error_message = _json_serializable(exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "success": False,
-            "message": _json_serializable(exc.detail),
+            "message": error_message,  # For backward compatibility
+            "detail": error_message,   # Standard FastAPI format
             "status_code": exc.status_code,
             "error": type(exc).__name__
         }

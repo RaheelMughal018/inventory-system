@@ -63,6 +63,7 @@ def create_expense(
         debit=amount,
         credit=Decimal("0.00"),
         expense_id=expense.id,
+        account_id=account_id,  # Track which account was used
     )
     db.add(ledger_entry)
     add_account_ledger_entry(
@@ -73,6 +74,12 @@ def create_expense(
         debit=amount,
         credit=Decimal("0.00"),
     )
+    
+    # Update current balance - deduct expense amount
+    account = db.query(PaymentAccount).filter(PaymentAccount.id == account_id).first()
+    if account:
+        account.current_balance = (account.current_balance or Decimal("0.00")) - amount
+    
     try:
         db.commit()
         db.refresh(expense)
@@ -119,6 +126,7 @@ def create_expenses_bulk(
             debit=expense.amount,
             credit=Decimal("0.00"),
             expense_id=expense.id,
+            account_id=account_id,  # Track which account was used
         )
         db.add(ledger_entry)
         add_account_ledger_entry(
@@ -129,6 +137,12 @@ def create_expenses_bulk(
             debit=expense.amount,
             credit=Decimal("0.00"),
         )
+        
+        # Update current balance - deduct expense amount
+        account = db.query(PaymentAccount).filter(PaymentAccount.id == account_id).first()
+        if account:
+            account.current_balance = (account.current_balance or Decimal("0.00")) - expense.amount
+        
         created.append(expense)
     try:
         db.commit()

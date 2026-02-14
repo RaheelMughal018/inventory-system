@@ -7,6 +7,7 @@ Combines best practices from both implementations:
 - All purchase operations including invoice creation, payments, and queries
 """
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, cast, Date
@@ -847,7 +848,8 @@ class PurchaseService:
             ref_type="PAYMENT",
             ref_id=payment.id,
             debit=Decimal('0.00'),
-            credit=amount  # Reduces what we owe
+            credit=amount,  # Reduces what we owe
+            account_id=account_id  # Track which account was used for payment
         )
         self.db.add(payment_ledger)
         
@@ -860,6 +862,11 @@ class PurchaseService:
             debit=amount,
             credit=Decimal('0.00'),
         )
+        
+        # Update current balance - deduct payment amount
+        account = self.db.query(PaymentAccount).filter(PaymentAccount.id == account_id).first()
+        if account:
+            account.current_balance = (account.current_balance or Decimal('0.00')) - amount
         
         supplier_balance_after = supplier_balance_before - amount
         
@@ -932,16 +939,16 @@ class PurchaseService:
                 )
             
             # 2b. Check payment account has sufficient balance
-            # try:
-            #     acc_balance = get_account_balance(self.db, account_id)
-            #     if acc_balance < amount:
-            #         raise ValueError(
-            #             f"Insufficient balance in account. Available: {acc_balance}, Required: {amount}"
-            #         )
-            # except ValueError as e:
-            #     if "not found" in str(e).lower() or "Insufficient" in str(e):
-            #         raise
-            #     raise ValueError(f"Payment account error: {e}")
+            try:
+                acc_balance = get_account_balance(self.db, account_id)
+                if acc_balance < amount:
+                    raise ValueError(
+                        f"Insufficient balance in account. Available: {acc_balance}, Required: {amount}"
+                    )
+            except ValueError as e:
+                if "not found" in str(e).lower() or "Insufficient" in str(e):
+                    raise
+                raise ValueError(f"Payment account error: {e}")
             
             # 3. Process payment
             self._process_purchase_payment(
@@ -1048,6 +1055,7 @@ class PurchaseService:
             ref_id=payment.id,
             debit=Decimal("0.00"),
             credit=amount,
+            account_id=account_id  # Track which account received the payment
         )
         self.db.add(fl)
 
@@ -1060,6 +1068,11 @@ class PurchaseService:
             debit=Decimal("0.00"),
             credit=amount,
         )
+        
+        # Update current balance - add payment amount (money received)
+        account = self.db.query(PaymentAccount).filter(PaymentAccount.id == account_id).first()
+        if account:
+            account.current_balance = (account.current_balance or Decimal('0.00')) + amount
 
         invoice.recieved_amount += amount
         invoice.balance_due -= amount
@@ -1133,6 +1146,11 @@ class PurchaseService:
                     debit=Decimal('0.00'),
                     credit=amount,
                 )
+                
+                # Update current balance - add back payment amount (refund)
+                account = self.db.query(PaymentAccount).filter(PaymentAccount.id == payment.account_id).first()
+                if account:
+                    account.current_balance = (account.current_balance or Decimal('0.00')) + amount
             
             # Delete payment
             self.db.delete(payment)

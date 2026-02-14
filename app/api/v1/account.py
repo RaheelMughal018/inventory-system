@@ -73,11 +73,13 @@ def get_account_balance_route(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     opening = account.opening_balance or Decimal("0.00")
+    current = account.current_balance or Decimal("0.00")
     return AccountBalanceResponse(
         account_id=account_id,
         account_name=account.name,
-        balance=balance,
+        balance=current,  # Use current_balance
         opening_balance=opening,
+        current_balance=current,
     )
 
 

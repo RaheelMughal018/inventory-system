@@ -26,11 +26,13 @@ class PaymentAccount(Base):
     name = Column(String(50), nullable=False)
     type = Column(Enum(PaymentAccountType), nullable=False)  # Cash, Bank, JazzCash
     opening_balance = Column(Numeric(15, 2), nullable=True, default=0)
+    current_balance = Column(Numeric(15, 2), nullable=False, default=0)  # Updated on every transaction
 
     created_at = Column(DateTime, server_default=func.now())
     payments = relationship("Payment", back_populates="account")
     expenses = relationship("Expense", back_populates="account")
     ledger_entries = relationship("AccountLedger", back_populates="account", cascade="all, delete-orphan")
+    financial_ledger_entries = relationship("FinancialLedger", back_populates="account")
 
 
 class AccountLedger(Base):

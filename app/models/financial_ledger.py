@@ -21,6 +21,10 @@ class FinancialLedger(Base):
 
     # Optional link to expense (when ref_type is EXPENSE)
     expense_id = Column(String(20), ForeignKey("expenses.id"), nullable=True)
+    
+    # Optional link to payment account (which account was used for this transaction)
+    account_id = Column(String(20), ForeignKey("payment_accounts.id", ondelete="SET NULL"), nullable=True)
 
     user = relationship("User", back_populates='ledger_entries')
     expense = relationship("Expense", back_populates="ledger_entry")
+    account = relationship("PaymentAccount", back_populates="financial_ledger_entries")
